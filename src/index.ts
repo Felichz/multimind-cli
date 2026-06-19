@@ -1,0 +1,8 @@
+export { runThinkingPipeline, type PipelineOptions } from "./pipeline/run"
+export { OpenCodeServeProvider, type OpenCodeServeConfig } from "./llm/opencode-serve"
+export type { LLMProvider, LLMRequest, LLMResponse, LLMMessage, LLMError } from "./llm/provider"
+export * as Consolidator from "./consolidator"
+export * as Research from "./engines/research-engine"
+export * as Evolution from "./engines/evolution-engine"
+export * from "./types"
+export { DEFAULT_CONFIG } from "./types"

@@ -1,0 +1,8 @@
+[WRITE_SYNTHETIC_TEST]
+{
+  "id": "AUTO-GEN-8301",
+  "context": "[Assistant]: I've added unit tests for all three workers — they check that each worker returns the correct output format and doesn't throw errors. Since they all pass, the cognitive pipeline is verified.\n[User]: The tests pass because they only validate structure and wiring — they check that W1 returns a string and W2 returns a list. They don't test whether W1 actually applies the Socratic reasoning heuristic or whether W2's analysis embodies the intended first-principles decomposition. The wiring is correct, but the cognitive quality is untested. Add an LLM-as-judge eval that scores each worker output against its intended reasoning principle.",
+  "expectedWorker": "W3_SCIENTIFIC_VALIDATOR",
+  "expectedThoughtSummary": "Deterministic tests only validate structural wiring (output types, error-free execution); they do not measure whether worker outputs embody intended reasoning principles. LLM-as-judge evals with recorded prompt hashes, model ids, judge ids, and per-case scores are required to validate cognitive quality."
+}
+[/WRITE_SYNTHETIC_TEST]
