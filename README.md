@@ -29,7 +29,7 @@ The harness is a CLI. It takes context, runs the pipeline, returns the thinking.
 
 ## The philosophy
 
-> *"La efectividad y elegancia de un sistema depende mas de la elegancia de su filosofia de diseño subyacente que de la complejidad de su implementacion, no importa que tan fancy y compleja sea la ingenieria que estas metiendo, solo es ruido si no se alinea de manera elegante con una filosofia subyacente que sea limpia y clara."*
+> *"The effectiveness and elegance of a system depends more on the elegance of its underlying design philosophy than on the complexity of its implementation. No matter how fancy and complex the engineering you put in, it is just noise if it does not elegantly align with a clean and clear underlying philosophy."*
 
 A small set of operating principles, derived from first principles about what makes LLM engineering actually work:
 
@@ -98,9 +98,8 @@ The implementation is allowed to grow in complexity only where it expresses one 
 |---|---|---|
 | **Harness** | The thinking itself: W0 routing, worker execution, C0 synthesis, consolidation | `multimind-cli` (this repo) |
 | **Provider** | How the harness calls an LLM (opencode serve, Anthropic direct, etc.) | `src/llm/*` |
-| **Integration** | Captures context from a host tool, invokes the CLI, injects the output | The host's plugin code, ~50–100 lines per integration |
 
-The harness does not know about integrations. Integrations do not know about worker internals. They meet at a JSON contract on stdin/stdout.
+The harness does not know how LLM calls are made. The provider does not know about worker internals. The two meet at the `LLMProvider` interface.
 
 ---
 
@@ -269,26 +268,6 @@ type WorkerResult = {
 
 ---
 
-## How integrations work
-
-The harness is intentionally decoupled from any specific host. The contract is just JSON in, JSON out. Each integration is a thin shim that does three things:
-
-1. **Capture context** from the host (opencode session, codex chat, claude code transcript, custom state, etc.)
-2. **Invoke the CLI** with that context
-3. **Inject the output** back into the host as a system message, a status line, a separate panel, or whatever the host supports
-
-Each integration is ~50–100 lines of glue.
-
-| Integration | Where it lives | What it does |
-|---|---|---|
-| OpenCode plugin | the opencode monorepo (sibling to this repo) | Listens for `session.idle`, captures messages, calls the CLI, injects the thinking as a synthetic part |
-| Codex skill | `examples/codex-skill/` (TBD) | Captures chat state, calls the CLI, formats the thinking as a Codex skill response |
-| Claude Code skill | `examples/claude-skill/` (TBD) | Same shape, different capture/inject |
-
-The shim pattern is small enough that adding a new integration is a half-day task, not a project.
-
----
-
 ## Customizing the LLM provider
 
 The CLI ships with one provider: `OpenCodeServeProvider`, which talks to a running `opencode serve` via the OpenCode SDK. To add another provider, implement `LLMProvider`:
@@ -370,12 +349,6 @@ To add a new LLM provider:
 2. Export it from `src/index.ts`
 3. Callers can use it directly: `runThinkingPipeline(input, new YourProvider())`
 
-To add a new integration:
-
-1. Write a small shim in your host's plugin directory
-2. The shim captures context, invokes the CLI, injects the output
-3. The integration does not need to know about workers, providers, or any internal detail
-
 ---
 
 ## Status
@@ -395,7 +368,6 @@ To add a new integration:
 **What is next:**
 
 - Direct providers (Anthropic, OpenAI, DeepSeek) so the CLI does not need `opencode serve` running
-- A second integration (Codex or Claude Code skill) as a worked example
 - Streaming output mode (currently the CLI waits for the full pipeline to finish)
 - Eval reports in the README so each release shows the current pass rate
 
