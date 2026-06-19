@@ -96,7 +96,7 @@ export async function runThinkingPipeline(
     messageCount: messages.length,
   })
 
-  const model = parseModel(input.model ?? config.model ?? "opencode/deepseek-v4-flash-free")
+  const model = parseModel(input.model ?? config.model ?? "opencode-go/minimax-m3")
 
   // 1. W0 router
   const w0Prompt = await loadPrompt(promptsDir, "W0_ROUTER.md")

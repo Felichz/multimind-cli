@@ -30,3 +30,8 @@ src/prompts/AUTO-GEN-*.json
 src/empirical-*.ts
 src/empirical-*.md
 journal/EMPIRICAL-*.md
+tests/fail_first_synthetic_eval*.json
+tests/opencode-serve.test.ts
+tests/provider.test.ts
+tests/pipeline/
+EMPIRICAL_ITERATION_CONTRACT.md

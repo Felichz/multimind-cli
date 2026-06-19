@@ -93,7 +93,7 @@ export type SubconsciousConfig = {
 
 export const DEFAULT_CONFIG: SubconsciousConfig = {
   enabled: true,
-  model: "opencode/deepseek-v4-flash-free",
+  model: "opencode-go/minimax-m3",
   delivery: "silent",
   injectionMode: "synthetic",
   autoContinue: true,
