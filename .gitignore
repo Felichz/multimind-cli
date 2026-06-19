@@ -22,3 +22,11 @@ build/
 .multimind/
 evals/runs/
 evals/reports/
+.opencode/
+
+# Auto-generated files produced by the evolution engine during runs
+src/prompts/AUTO-GEN-*.json
+!src/prompts/AUTO-GEN-W3-TEST.json
+src/empirical-*.ts
+src/empirical-*.md
+journal/EMPIRICAL-*.md

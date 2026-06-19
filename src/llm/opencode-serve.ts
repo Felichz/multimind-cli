@@ -39,9 +39,6 @@ export class OpenCodeServeProvider implements LLMProvider {
 
   async complete(request: LLMRequest, signal?: AbortSignal): Promise<LLMResponse> {
     const startedAt = Date.now()
-
-    // Create a one-shot session, prompt it, harvest the response, delete the session.
-    // The v2 SDK uses flat parameters (no path/body wrappers).
     const session = await this.client.session.create({
       directory: this.directory,
       title: "multimind-cli-worker",
@@ -51,19 +48,44 @@ export class OpenCodeServeProvider implements LLMProvider {
       throw new Error("opencode-serve: failed to create session")
     }
 
+    // Track the abort machinery so we can clean it up in finally. Without this,
+    // a pending setTimeout keeps the Node event loop alive and the test process
+    // hangs long after the actual LLM call has resolved.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    let aborted = false
+
+    const onAbort = () => {
+      aborted = true
+      this.client.session.delete({ sessionID, directory: this.directory }).catch(() => undefined)
+    }
+
     try {
       if (signal?.aborted) throw new Error("aborted before prompt")
 
-      const response = await Promise.race([
-        this.client.session.prompt({
-          sessionID,
-          directory: this.directory,
-          parts: [{ type: "text", text: buildPromptText(request) }],
-          ...(request.model ? { model: request.model } : {}),
-          ...(request.tools ? { tools: request.tools } : {}),
-        }),
-        abortAfter(signal, this.timeoutMs, sessionID, this.client, this.directory),
-      ])
+      const timeoutPromise = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          onAbort()
+          reject(new Error(`opencode-serve: timeout after ${this.timeoutMs}ms`))
+        }, this.timeoutMs)
+        signal?.addEventListener("abort", onAbort, { once: true })
+      })
+
+      let response: Awaited<ReturnType<typeof this.client.session.prompt>>
+      try {
+        response = await Promise.race([
+          this.client.session.prompt({
+            sessionID,
+            directory: this.directory,
+            parts: [{ type: "text", text: buildPromptText(request) }],
+            ...(request.model ? { model: request.model } : {}),
+            ...(request.tools ? { tools: request.tools } : {}),
+          }),
+          timeoutPromise,
+        ])
+      } finally {
+        if (timer) clearTimeout(timer)
+        signal?.removeEventListener("abort", onAbort)
+      }
 
       const output = (response.data?.parts ?? [])
         .flatMap((part) => (part.type === "text" ? [part.text] : []))
@@ -72,7 +94,7 @@ export class OpenCodeServeProvider implements LLMProvider {
       return {
         content: output,
         usage: { inputTokens: 0, outputTokens: 0 },
-        finishReason: "stop",
+        finishReason: aborted ? "error" : "stop",
         latencyMs: Date.now() - startedAt,
       }
     } finally {
@@ -87,22 +109,4 @@ function buildPromptText(request: LLMRequest): string {
     .map((message) => `[${message.role.toUpperCase()}]: ${message.content}`)
     .join("\n\n")
   return `${system}${messages}`
-}
-
-function abortAfter(signal: AbortSignal | undefined, timeoutMs: number, sessionID: string, client: OpencodeClient, directory: string) {
-  return new Promise<never>((_, reject) => {
-    const timer = setTimeout(() => {
-      client.session.delete({ sessionID, directory }).catch(() => undefined)
-      reject(new Error(`opencode-serve: timeout after ${timeoutMs}ms`))
-    }, timeoutMs)
-    signal?.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timer)
-        client.session.delete({ sessionID, directory }).catch(() => undefined)
-        reject(new Error(signal.reason ? String(signal.reason) : "aborted"))
-      },
-      { once: true },
-    )
-  })
 }
