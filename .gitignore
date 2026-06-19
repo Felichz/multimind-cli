@@ -35,3 +35,4 @@ tests/opencode-serve.test.ts
 tests/provider.test.ts
 tests/pipeline/
 EMPIRICAL_ITERATION_CONTRACT.md
+tests/concurrency-harness.test.ts
