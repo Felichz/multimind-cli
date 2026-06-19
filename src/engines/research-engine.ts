@@ -1,17 +1,15 @@
 /**
  * Research engine — handles W13 [EXECUTE_RESEARCH] requests.
  *
- * Decoupled from the OpenCode Plugin API: takes an LLMProvider directly.
- * The pipeline passes the same provider it uses for workers, so the research
- * engine inherits whatever auth, models, and retry behaviour the provider
- * already has.
+ * Parity with the opencode monorepo's research-engine. Uses the
+ * LLMProvider directly. Worker prompts are loaded as core+extensions
+ * via the standard pipeline helper.
  */
 
 import path from "node:path"
 import type { LLMProvider } from "../llm/provider"
 
 type ModelSelection = { providerID: string; modelID: string }
-
 type WorkerInsight = { key: string; name: string; output: string }
 
 const EXECUTE_RESEARCH = /\[EXECUTE_RESEARCH\]\s*(\{[\s\S]*?\})\s*\[\/EXECUTE_RESEARCH\]/gis
@@ -38,7 +36,7 @@ export function extractResearchRequests(insights: WorkerInsight[]): ResearchRequ
           requests.push({ queries: parsed.queries, source: insight, fullMatch: match[0] })
         }
       } catch {
-        // Malformed research request — skip silently. The pipeline logs it elsewhere.
+        // Malformed research request — skip silently.
       }
     }
   }
@@ -47,7 +45,8 @@ export function extractResearchRequests(insights: WorkerInsight[]): ResearchRequ
 
 export async function processResearchTriggers(
   insights: WorkerInsight[],
-  promptsDir: string,
+  coreDir: string,
+  extDir: string,
   provider: LLMProvider,
   model: ModelSelection,
 ): Promise<string[]> {
@@ -55,7 +54,7 @@ export async function processResearchTriggers(
   const results: string[] = []
 
   for (const request of requests) {
-    const researchPrompt = await loadPrompt(promptsDir, "W13_RESEARCHER.md")
+    const researchPrompt = await loadPrompt(coreDir, extDir, "W13_RESEARCHER.md")
     if (!researchPrompt) {
       results.push(`Research request skipped: W13_RESEARCHER.md not found`)
       continue
@@ -76,8 +75,15 @@ export async function processResearchTriggers(
   return results
 }
 
-async function loadPrompt(promptsDir: string, name: string): Promise<string | undefined> {
-  const file = Bun.file(path.join(promptsDir, name))
-  if (!(await file.exists())) return undefined
-  return (await file.text()).trim() || undefined
+async function loadPrompt(coreDir: string, extDir: string, filename: string): Promise<string | undefined> {
+  const core = Bun.file(path.join(coreDir, filename))
+  if (!(await core.exists())) return undefined
+  const ext = Bun.file(path.join(extDir, filename))
+  const extText = (await ext.exists()) ? await ext.text() : ""
+  return [
+    (await core.text()).trim(),
+    extText.trim() ? `\n\n--- SYSTEM EXTENSIONS & USER REFINEMENTS ---\n${extText.trim()}` : "",
+  ]
+    .join("")
+    .trim() || undefined
 }

@@ -48,6 +48,7 @@ type CaseResult = {
   workersFired: string[]
   workerOutputs: Record<string, string>
   judgeReason: string
+  judgeMissing: string[]
   pipelineMs: number
   judgeMs: number
   totalMs: number
@@ -140,6 +141,7 @@ async function runCase(testCase: Case, provider: LLMProvider, skipJudge: boolean
     pipelineResult = await runThinkingPipeline(input, provider, {
       promptsDir: PROMPTS_DIR,
       runsDir: RUNS_DIR,
+      synthesizeFinalResponse: true,
     })
   } catch (error) {
     return {
@@ -151,6 +153,7 @@ async function runCase(testCase: Case, provider: LLMProvider, skipJudge: boolean
       workersFired: [],
       workerOutputs: {},
       judgeReason: "pipeline error",
+      judgeMissing: [],
       pipelineMs: 0,
       judgeMs: 0,
       totalMs: Date.now() - startedAt,
@@ -162,6 +165,7 @@ async function runCase(testCase: Case, provider: LLMProvider, skipJudge: boolean
   const pipelineMs = pipelineResult.totalDurationMs
   let score = pipelineResult.thinking ? pipelineResult.thinking.length > 50 ? 80 : 30 : 0
   let judgeReason = skipJudge ? "judge skipped" : "(no judge)"
+  let judgeMissing: string[] = []
 
   if (!skipJudge && pipelineResult.thinking) {
     const judgeResult = await judgeThinking(provider, {
@@ -171,9 +175,11 @@ async function runCase(testCase: Case, provider: LLMProvider, skipJudge: boolean
       mustAvoid: testCase.mustAvoid,
       userMessage: testCase.userMessage,
       history: testCase.history,
+      minScore: testCase.minScore,
     })
     score = judgeResult.score
-    judgeReason = judgeResult.reason
+    judgeReason = judgeResult.rationale
+    judgeMissing = judgeResult.missing
   }
 
   return {
@@ -185,6 +191,7 @@ async function runCase(testCase: Case, provider: LLMProvider, skipJudge: boolean
     workersFired: pipelineResult.workers.map((w) => w.key),
     workerOutputs: Object.fromEntries(pipelineResult.workers.map((w) => [w.key, w.output])),
     judgeReason,
+    judgeMissing,
     pipelineMs,
     judgeMs: 0,
     totalMs: Date.now() - startedAt,

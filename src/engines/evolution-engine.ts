@@ -1,8 +1,10 @@
 /**
- * Evolution engine — handles W10 [WRITE_EXTENSION] requests, asks W12 to
- * generate synthetic tests, queues empirical self-improvement candidates.
+ * Evolution engine — handles W10 [WRITE_EXTENSION] requests, asks W12
+ * to generate synthetic tests, queues empirical self-improvement
+ * candidates.
  *
- * Decoupled from the OpenCode Plugin API: takes an LLMProvider directly.
+ * Parity with the opencode monorepo's evolution-engine. Uses the
+ * LLMProvider directly.
  */
 
 import path from "node:path"
@@ -45,7 +47,8 @@ export function extractExtensionRequests(insights: WorkerInsight[]): ExtensionRe
 
 export async function processEvolutionTriggers(
   insights: WorkerInsight[],
-  promptsDir: string,
+  coreDir: string,
+  extDir: string,
   provider: LLMProvider,
   model: ModelSelection,
   runsDir: string,
@@ -54,7 +57,7 @@ export async function processEvolutionTriggers(
   const notes: string[] = []
 
   for (const request of requests) {
-    const w12Prompt = await loadPrompt(promptsDir, "W12_AUTO_TESTER.md")
+    const w12Prompt = await loadPrompt(coreDir, extDir, "W12_AUTO_TESTER.md")
     if (!w12Prompt) {
       notes.push(`Evolution request for ${request.target} skipped: W12_AUTO_TESTER.md missing`)
       continue
@@ -73,8 +76,15 @@ export async function processEvolutionTriggers(
   return { extensionRequests: requests, notes }
 }
 
-async function loadPrompt(promptsDir: string, name: string): Promise<string | undefined> {
-  const file = Bun.file(path.join(promptsDir, name))
-  if (!(await file.exists())) return undefined
-  return (await file.text()).trim() || undefined
+async function loadPrompt(coreDir: string, extDir: string, filename: string): Promise<string | undefined> {
+  const core = Bun.file(path.join(coreDir, filename))
+  if (!(await core.exists())) return undefined
+  const ext = Bun.file(path.join(extDir, filename))
+  const extText = (await ext.exists()) ? await ext.text() : ""
+  return [
+    (await core.text()).trim(),
+    extText.trim() ? `\n\n--- SYSTEM EXTENSIONS & USER REFINEMENTS ---\n${extText.trim()}` : "",
+  ]
+    .join("")
+    .trim() || undefined
 }

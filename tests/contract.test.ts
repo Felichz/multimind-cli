@@ -37,12 +37,32 @@ describe("package shape", () => {
 })
 
 describe("prompts", () => {
-  test("W0 router prompt is present", () => {
-    expect(fs.existsSync(path.join(PROMPTS_DIR, "W0_ROUTER.md"))).toBe(true)
+  test("W0 router prompt is present and non-trivial", () => {
+    const file = path.join(PROMPTS_DIR, "W0_ROUTER.md")
+    expect(fs.existsSync(file)).toBe(true)
+    const text = fs.readFileSync(file, "utf8").trim()
+    // The original W0_ROUTER is several hundred lines. If it dropped to a
+    // 2-line stub (which is what happened when extensions overwrote cores
+    // during the initial extraction), the harness can't do meaningful work.
+    expect(text.length).toBeGreaterThan(1000)
   })
 
-  test("C0 synthesizer prompt is present", () => {
-    expect(fs.existsSync(path.join(PROMPTS_DIR, "C0_SYNTHESIZER.md"))).toBe(true)
+  test("C0 synthesizer prompt is present and non-trivial", () => {
+    const file = path.join(PROMPTS_DIR, "C0_SYNTHESIZER.md")
+    expect(fs.existsSync(file)).toBe(true)
+    const text = fs.readFileSync(file, "utf8").trim()
+    expect(text.length).toBeGreaterThan(500)
+  })
+
+  test("core worker prompts are full (not 2-line stubs from extension overwrite)", () => {
+    // Each core prompt should be substantial. The extensions are in
+    // prompts-extensions/ and are appended at runtime, not substituted.
+    for (const key of ["W2", "W3", "W4", "W6", "W8", "W10", "W12", "W14"]) {
+      const file = fs.readdirSync(PROMPTS_DIR).find((f) => f.startsWith(key + "_") || f.startsWith(key + "."))
+      expect(file, `core prompt for ${key}`).toBeDefined()
+      const text = fs.readFileSync(path.join(PROMPTS_DIR, file!), "utf8").trim()
+      expect(text.length, `${file} should be a full prompt, not a stub`).toBeGreaterThan(500)
+    }
   })
 
   test("core worker prompts cover W1 through W17", () => {
