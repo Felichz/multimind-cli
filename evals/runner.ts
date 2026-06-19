@@ -17,7 +17,7 @@
 import { readFile, writeFile, mkdir } from "node:fs/promises"
 import path from "node:path"
 import { runThinkingPipeline } from "../src/pipeline/run"
-import { OpenCodeServeProvider } from "../src/llm/opencode-serve"
+import { OpenAICompatProvider } from "../src/llm/openai-compat"
 import { judgeThinking } from "./scorer"
 import type { ThinkingInput, WorkerResult } from "../src/types"
 import type { LLMProvider } from "../src/llm/provider"
@@ -76,7 +76,7 @@ async function main() {
   const cases = await loadCases(DATASET, args)
   console.error(`Loaded ${cases.length} cases from ${path.relative(ROOT, DATASET)}`)
 
-  const provider = new OpenCodeServeProvider()
+  const provider = new OpenAICompatProvider()
   console.error(`Provider: ${provider.name}`)
 
   const startedAt = Date.now()

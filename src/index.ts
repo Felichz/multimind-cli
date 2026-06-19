@@ -1,5 +1,5 @@
 export { runThinkingPipeline, type PipelineOptions } from "./pipeline/run"
-export { OpenCodeServeProvider, type OpenCodeServeConfig } from "./llm/opencode-serve"
+export { OpenAICompatProvider, type OpenAICompatConfig } from "./llm/openai-compat"
 export type { LLMProvider, LLMRequest, LLMResponse, LLMMessage, LLMError } from "./llm/provider"
 export * as Consolidator from "./consolidator"
 export * as Research from "./engines/research-engine"

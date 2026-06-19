@@ -1,7 +1,7 @@
 {
   "name": "multimind-cli",
   "version": "0.1.0",
-  "description": "Background thinking pipeline for any LLM-powered tool. W0 router, W1–W17 workers, C0 synthesizer, consolidator, research/evolution engines. Provider-agnostic, stateless, CLI-first.",
+  "description": "Background thinking pipeline as a command. Provider-agnostic, stateless, designed to be driven by any LLM-powered tool.",
   "type": "module",
   "bin": {
     "multimind": "./bin/multimind.ts"
@@ -15,14 +15,9 @@
   },
   "scripts": {
     "test": "bun test",
-    "test:parallel": "bun test --parallel",
-    "test:race": "bun test tests/concurrency-harness.test.ts --parallel",
     "typecheck": "tsc --noEmit",
     "evals": "bun run evals/runner.ts",
     "cli": "bun run src/cli.ts"
-  },
-  "dependencies": {
-    "@opencode-ai/sdk": "^1.15.13"
   },
   "devDependencies": {
     "@types/bun": "latest",

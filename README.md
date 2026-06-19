@@ -97,9 +97,9 @@ The implementation is allowed to grow in complexity only where it expresses one 
 | Layer | Responsibility | Where it lives |
 |---|---|---|
 | **Harness** | The thinking itself: W0 routing, worker execution, C0 synthesis, consolidation | `multimind-cli` (this repo) |
-| **Provider** | How the harness calls an LLM (opencode serve, Anthropic direct, etc.) | `src/llm/*` |
+| **Provider** | A small client that turns an `LLMRequest` into a chat completions HTTP call | `src/llm/openai-compat.ts` (default) + any user-supplied implementation |
 
-The harness does not know how LLM calls are made. The provider does not know about worker internals. The two meet at the `LLMProvider` interface.
+The harness does not know how LLM calls are made. The provider does not know about worker internals. The two meet at the `LLMProvider` interface. The default provider is a plain `fetch` client — no SDK, no local server required.
 
 ---
 
@@ -152,7 +152,13 @@ The `multimind` binary lives at `bin/multimind.ts`. You can run it directly with
 ### Requirements
 
 - Bun 1.3+
-- An LLM provider. Default: `opencode serve` running on `OPENCODE_BASE_URL` (default `http://127.0.0.1:4096`).
+- A reachable OpenAI-compatible chat completions endpoint. Set the URL and key via environment:
+  ```bash
+  export LLM_BASE_URL="https://opencode.ai/zen/go/v1"
+  export LLM_API_KEY="sk-..."
+  export LLM_MODEL="minimax-m3"  # or any model your endpoint exposes
+  ```
+  Any endpoint that follows the OpenAI chat completions spec works (opencode-go, OpenAI, Ollama's OpenAI mode, LM Studio, vLLM, etc.). The default provider is a plain `fetch` call — no proprietary SDK, no local server required.
 
 ### Run a single think
 
@@ -270,7 +276,9 @@ type WorkerResult = {
 
 ## Customizing the LLM provider
 
-The CLI ships with one provider: `OpenCodeServeProvider`, which talks to a running `opencode serve` via the OpenCode SDK. To add another provider, implement `LLMProvider`:
+The CLI ships with one default provider: `OpenAICompatProvider`, a plain `fetch` client that talks to any OpenAI-compatible chat completions endpoint. The implementation is ~100 lines, no SDK, no native binding. Set `LLM_BASE_URL` and `LLM_API_KEY` to point it at your service.
+
+To add a custom provider (e.g. for streaming, Anthropic direct, a local model with a non-standard wire format), implement `LLMProvider`:
 
 ```ts
 import type { LLMProvider, LLMRequest, LLMResponse } from "multimind-cli/llm/provider"
@@ -359,15 +367,14 @@ To add a new LLM provider:
 - Research and evolution engines
 - LLM-as-judge eval scoring
 - 50-case reaction eval dataset
-- OpenCode Serve provider
-- Provider abstraction (LLMProvider interface)
+- OpenAI-compatible HTTP provider (default, no SDK)
+- Provider abstraction (LLMProvider interface) for custom implementations
 - CLI with `think` and `eval` subcommands
-- 21 unit + contract tests, all passing
-- Self-improvement loop (extends engine; empirical validation lives in the opencode monorepo's eval driver for now)
+- 22 unit + contract tests, all passing
+- User-specific prompt extensions in `src/prompts-extensions/` (gitignored, per-user)
 
 **What is next:**
 
-- Direct providers (Anthropic, OpenAI, DeepSeek) so the CLI does not need `opencode serve` running
 - Streaming output mode (currently the CLI waits for the full pipeline to finish)
 - Eval reports in the README so each release shows the current pass rate
 

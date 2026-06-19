@@ -22,17 +22,24 @@ build/
 .multimind/
 evals/runs/
 evals/reports/
+
+# Runtime artifacts: the evolution engine writes per-run session data
+# (debug-store, synthetic tests, empirical contract files) to a hidden
+# `.opencode/subconscious/` next to the working directory. Not part of
+# the harness, not for the public repo.
 .opencode/
 
-# Auto-generated files produced by the evolution engine during runs
+# User refinements: prompts-extensions/ is where each user (or project)
+# stores their personal worker refinements. The core harness ships with
+# just the prompts/ directory. Users who want to customize copy the
+# example extensions and let the pipeline combine core + extensions at
+# runtime.
+src/prompts-extensions/*
+!src/prompts-extensions/.gitkeep
+
+# Auto-generated synthetic test files produced by the evolution engine.
+# Not for the repo. If you want to keep a specific synthetic test, copy
+# it into a regular test file.
 src/prompts/AUTO-GEN-*.json
 !src/prompts/AUTO-GEN-W3-TEST.json
-src/empirical-*.ts
-src/empirical-*.md
-journal/EMPIRICAL-*.md
 tests/fail_first_synthetic_eval*.json
-tests/opencode-serve.test.ts
-tests/provider.test.ts
-tests/pipeline/
-EMPIRICAL_ITERATION_CONTRACT.md
-tests/concurrency-harness.test.ts

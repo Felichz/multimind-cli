@@ -15,7 +15,7 @@
  */
 
 import path from "node:path"
-import { runThinkingPipeline, OpenCodeServeProvider } from "../src/index"
+import { runThinkingPipeline, OpenAICompatProvider } from "../src/index"
 import type { ThinkingInput, ThinkingOutput } from "../src/types"
 
 const USAGE = `multimind — background thinking pipeline
@@ -45,7 +45,7 @@ async function main() {
   }
 
   if (command === "status") {
-    const provider = new OpenCodeServeProvider()
+    const provider = new OpenAICompatProvider()
     console.log(JSON.stringify({ provider: provider.name }, null, 2))
     return
   }
@@ -66,7 +66,7 @@ async function main() {
   const input = await readInput(args)
   const model = input.model ?? process.env.MULTIMIND_MODEL
 
-  const provider = new OpenCodeServeProvider()
+  const provider = new OpenAICompatProvider()
   const result = await runThinkingPipeline({ ...input, model }, provider)
 
   await writeOutput(args, result)

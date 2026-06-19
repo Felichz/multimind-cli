@@ -23,7 +23,7 @@ describe("package shape", () => {
     const indexPath = path.join(ROOT, "src", "index.ts")
     const index = fs.readFileSync(indexPath, "utf8")
     expect(index).toContain("runThinkingPipeline")
-    expect(index).toContain("OpenCodeServeProvider")
+    expect(index).toContain("OpenAICompatProvider")
     expect(index).toContain("Consolidator")
     expect(index).toContain("DEFAULT_CONFIG")
   })
@@ -111,8 +111,12 @@ describe("LLM provider interface", () => {
     expect(provider).toContain("complete(")
   })
 
-  test("OpenCodeServeProvider implements LLMProvider", () => {
-    const serve = fs.readFileSync(path.join(ROOT, "src", "llm", "opencode-serve.ts"), "utf8")
-    expect(serve).toContain("implements LLMProvider")
+  test("OpenAICompatProvider implements LLMProvider", () => {
+    const compat = fs.readFileSync(path.join(ROOT, "src", "llm", "openai-compat.ts"), "utf8")
+    expect(compat).toContain("implements LLMProvider")
+    // The default provider must not depend on any proprietary SDK —
+    // the CLI is supposed to ship with just `fetch`.
+    expect(compat).not.toContain("require(")
+    expect(compat).not.toMatch(/from\s+['"]@opencode-ai/)
   })
 })
