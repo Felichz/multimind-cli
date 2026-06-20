@@ -129,14 +129,14 @@ describe("OpenAICompatProvider", () => {
     }
   })
 
-  test("returns a clear error on HTTP 4xx/5xx with the body excerpt", async () => {
+  test("returns a clear error on HTTP 4xx/5xx with the model name and body excerpt", async () => {
     const m = mockFetch(async () => {
       return new Response("invalid api key", { status: 401, statusText: "Unauthorized" })
     })
     try {
       const provider = new OpenAICompatProvider({ baseUrl: "http://localhost:9999/v1" })
       await expect(provider.complete({ messages: [{ role: "user", content: "hi" }] })).rejects.toThrow(
-        /HTTP 401 Unauthorized.*invalid api key/,
+        /model=.*HTTP 401 Unauthorized.*invalid api key/,
       )
     } finally {
       m.restore()

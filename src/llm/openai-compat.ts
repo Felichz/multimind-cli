@@ -121,7 +121,9 @@ export class OpenAICompatProvider implements LLMProvider {
 
     if (!response.ok) {
       const text = await response.text().catch(() => "")
-      throw new Error(`openai-compat: HTTP ${response.status} ${response.statusText}: ${text.slice(0, 500)}`)
+      throw new Error(
+        `openai-compat: model=${body.model} HTTP ${response.status} ${response.statusText}: ${text.slice(0, 500)}`,
+      )
     }
 
     const data = (await response.json()) as ChatCompletionResponse
