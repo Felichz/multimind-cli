@@ -145,7 +145,7 @@ export async function judgeThinking(
   }
 }
 
-function parseJudgeResponse(content: string): {
+export function parseJudgeResponse(content: string): {
   score: number
   valueAdded: number
   strengths: string[]

@@ -1,0 +1,25 @@
+{
+  "history": [
+    {
+      "info": { "id": "u1", "role": "user", "time": { "created": 1 } },
+      "parts": [{ "type": "text", "text": "should I ship a cache layer?" }]
+    },
+    {
+      "info": { "id": "a1", "role": "assistant", "time": { "created": 2, "completed": 3 } },
+      "parts": [{ "type": "text", "text": "yes, the benchmark shows 40% reduction in DB load." }]
+    },
+    {
+      "info": { "id": "u2", "role": "user", "time": { "created": 4 } },
+      "parts": [{ "type": "text", "text": "ship it" }]
+    },
+    {
+      "info": { "id": "a2", "role": "assistant", "time": { "created": 5 } },
+      "parts": [
+        {
+          "type": "text",
+          "text": "(assistant is about to respond — multimind will run background thinking first)"
+        }
+      ]
+    }
+  ]
+}
