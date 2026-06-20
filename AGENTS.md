@@ -175,7 +175,7 @@ A few examples of where the boundary is enforced:
 
 **`tests/contract.test.ts`:** `test("the library does NOT export synthesizeFinalResponse (the consumer's job)", ...)`. If you add it back, this test fails.
 
-**`evals/scorer.ts`:** The judge prompt's first paragraph says the input is "private, structured context that a downstream LLM (the consumer) will read." The scoring bands are calibrated for thinking quality, not user-facing response quality.
+**`src/judge.ts`:** The judge prompt's first paragraph says the input is "private, structured context that a downstream LLM (the consumer) will read." The scoring bands are calibrated for thinking quality, not user-facing response quality. The file lives in `src/` (not `evals/`) because the rubric is library code, reusable by any consumer that wants to score a heads-up outside the official 52-case suite.
 
 **`evals/runner.ts`:** After the pipeline runs, the runner does not call any synthesis step. The judge scores the heads-up. The runner writes the heads-up to the report. That is it.
 
