@@ -21,7 +21,15 @@ export type ResearchRequest = {
 }
 
 export function hasResearchTriggers(insights: WorkerInsight[]): boolean {
-  return insights.some((insight) => EXECUTE_RESEARCH.test(insight.output))
+  // Use a non-global probe for the trigger check. A shared regex
+  // with the `g` flag has stateful `lastIndex`, and a `.test()`
+  // call advances it permanently — which would cause a subsequent
+  // `matchAll` in `extractResearchRequests` to skip matches that
+  // start before the new `lastIndex`. Clone the regex per check.
+  return insights.some((insight) => {
+    const probe = new RegExp(EXECUTE_RESEARCH.source, EXECUTE_RESEARCH.flags.replace("g", ""))
+    return probe.test(insight.output)
+  })
 }
 
 export function extractResearchRequests(insights: WorkerInsight[]): ResearchRequest[] {

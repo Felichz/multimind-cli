@@ -23,9 +23,14 @@ export type ExtensionRequest = {
 }
 
 export function hasEvolutionTriggers(insights: WorkerInsight[]): boolean {
-  return insights.some(
-    (insight) => WRITE_EXTENSION.test(insight.output) || SYNTHETIC_TEST.test(insight.output),
-  )
+  // See the comment in research-engine: shared `g`-flagged regexes
+  // have stateful `lastIndex`. `.test()` would advance it and break
+  // a later `matchAll`. Clone the regex per check.
+  return insights.some((insight) => {
+    const writeProbe = new RegExp(WRITE_EXTENSION.source, WRITE_EXTENSION.flags.replace("g", ""))
+    const synthProbe = new RegExp(SYNTHETIC_TEST.source, SYNTHETIC_TEST.flags.replace("g", ""))
+    return writeProbe.test(insight.output) || synthProbe.test(insight.output)
+  })
 }
 
 export function extractExtensionRequests(insights: WorkerInsight[]): ExtensionRequest[] {
