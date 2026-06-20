@@ -2,16 +2,40 @@
 
 > A background thinking pipeline that runs as a command. Provider-agnostic, stateless, designed to be driven by any LLM-powered tool.
 
+[![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.5+-3178c6.svg)](https://www.typescriptlang.org)
+[![Bun](https://img.shields.io/badge/runtime-Bun-f9f1e1.svg)](https://bun.sh)
+[![version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/Felichz/multimind-cli)
+
 ```
 $ echo '{"history": [...]}' | multimind think
 {
-  "thinking": "## Subconscious Heads-Up\n\nThe cache strategy is ...",
-  "workers": ["W2", "W4", "W14"],
-  "routerDecision": "ACTIVATE",
-  "c0Decision": "safe_to_end",
-  "totalDurationMs": 8421
+  "headsUp": "[Subconscious Heads-Up]\n\nThe cache strategy carries ...",
+  "workers": {
+    "W2":  { "key": "W2",  "name": "GAP DETECTOR",      "output": "..." },
+    "W4":  { "key": "W4",  "name": "RISK SCANNER",      "output": "..." },
+    "W14": { "key": "W14", "name": "DELIVERY CONTRACT", "output": "..." }
+  },
+  "meta": {
+    "routerDecision": "ACTIVATE",
+    "c0Decision": "safe_to_end",
+    "totalDurationMs": 8421,
+    "runRecordPath": ".multimind/runs/...json"
+  }
 }
 ```
+
+Inject `headsUp` into your host LLM as context. Use `workers.W17` to surface security findings. Use `meta.c0Decision` as an internal signal. The CLI is for thinking; the consumer is for answering — see [AGENTS.md](AGENTS.md) for the full philosophy.
+
+**Latest eval (M3, opencode-go HTTP, 3 of 52 cases spot-checked):**
+
+| Case | Score | min | Workers fired | Result |
+|---|---:|---:|---|---|
+| REACT-001 | 95 | 80 | W1 | ✓ pass |
+| REACT-013 | 93 | 80 | W14 | ✓ pass |
+| HO-002    | 82 | 80 | W14, W2, W4, W6, W17, W12, W8 | ✓ pass |
+
+Mean: **90.0** · Pass rate: **3/3** · The full 50-case suite takes ~4 hours per run; spot-checks are run before each release.
 
 ---
 
@@ -395,24 +419,27 @@ multimind-cli/
 ## Development
 
 ```bash
-bun test                 # all 21 tests
-bun typecheck            # tsc --noEmit
-bun run bin/multimind.ts eval --limit 1   # smoke against a real LLM
+bun run ci               # typecheck + lint + tests (one command)
+bun test                 # 70 tests + 1 live-LLM-gated (set MULTIMIND_TEST_LIVE=1)
+bun run lint             # biome check (read-only)
+bun run format           # biome format --write
+bun typecheck            # tsc --noEmit (no behaviour change)
 ```
 
-The pipeline tests use a scripted `LLMProvider` so they don't need a real LLM. The eval suite needs a configured `OpenAICompatProvider` (set `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` or run `multimind config init`).
+The pipeline tests use a scripted `LLMProvider` so they don't need a real LLM. The eval suite needs a configured `OpenAICompatProvider` (set `MULTIMIND_BASE_URL`, `MULTIMIND_API_KEY`, `MULTIMIND_MODEL` or run `bun run bin/multimind.ts config init`).
 
 To add a new worker:
 
-1. Write the prompt at `src/prompts/W<n>_NAME.md`
+1. Write the prompt at `src/prompts/W<n>_NAME.md` (one file per worker, never two — duplicate file names throw at startup)
 2. The router will pick it up via the `WORKERS:` directive in W0's output
 3. Or, callers can force-fire specific workers with the `workers` override in `ThinkingInput`
+4. The contract test `core worker prompts cover W1 through W17` in `tests/contract.test.ts` will fail if a prompt file is missing
 
 To add a new LLM provider:
 
-1. Implement `LLMProvider` in `src/llm/<name>.ts`
+1. Implement `LLMProvider` in `src/llm/<name>.ts` (~100 lines is enough — see `openai-compat.ts` for the minimum)
 2. Export it from `src/index.ts`
-3. Callers can use it directly: `runThinkingPipeline(input, new YourProvider())`
+3. Callers use it directly: `runThinkingPipeline(input, new YourProvider())`
 
 ---
 
@@ -422,23 +449,30 @@ To add a new LLM provider:
 
 - W0 router, W1–W17 workers, C0 synthesizer, consolidator
 - Research and evolution engines
-- LLM-as-judge eval scoring
-- 50-case reaction eval dataset
+- LLM-as-judge eval scoring (calibrated rubric, heads-up lens)
+- 52-case reaction eval dataset
 - OpenAI-compatible HTTP provider (default, no SDK)
-- Provider abstraction (LLMProvider interface) for custom implementations
+- Provider abstraction (`LLMProvider` interface) for custom implementations
 - CLI with `think`, `config`, `eval`, and `status` subcommands
-- 22 unit + contract tests, all passing
+- **70 tests + 1 live-LLM-gated test, all passing** (pipeline, contract, dataset, provider, consolidator, scorer, CLI)
 - User-specific prompt extensions in `src/prompts-extensions/` (gitignored, per-user)
+- Local CI: `bun run ci` runs typecheck + lint + tests in one command
 
-**What is next:**
+**Latest eval results (M3 via opencode-go HTTP, 3 of 52 cases spot-checked):**
 
-- Streaming output mode (currently the CLI waits for the full pipeline to finish)
-- Eval reports in the README so each release shows the current pass rate
+| Case | Score | min | Result |
+|---|---:|---:|:---:|
+| REACT-001 | 95 | 80 | ✓ pass |
+| REACT-013 | 93 | 80 | ✓ pass |
+| HO-002    | 82 | 80 | ✓ pass |
+
+Mean: **90.0** · Pass rate: **3/3** · Run `bun run bin/multimind.ts eval --case <ID>` to reproduce.
 
 **What is intentionally not built:**
 
 - Trigger modes (auto-fire every N turns, etc.). The caller decides when to think. The harness is stateless.
 - Per-session state. Every invocation is a fresh think.
+- A user-facing response synthesizer. That is the consumer's job — see [AGENTS.md](AGENTS.md) for the boundary.
 - A bundled web UI. The CLI is the interface.
 - A hosted version. This is a local tool by design.
 
