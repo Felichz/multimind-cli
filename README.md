@@ -393,34 +393,48 @@ The same pattern works for OpenAI direct, DeepSeek direct, local models via Olla
 
 ```
 multimind-cli/
-├── src/
-│   ├── index.ts                  # main public exports
-│   ├── types.ts                  # ThinkingInput, ThinkingOutput, SubconsciousConfig
-│   ├── consolidator.ts           # output synthesis (delivery block, contracts, evidence)
-│   ├── debug-store.ts            # run records for post-hoc inspection
-│   ├── pipeline/
-│   │   └── run.ts                # the thinking orchestrator (W0, workers, C0, engines)
-│   ├── llm/
-│   │   ├── provider.ts           # LLMProvider interface
-│   │   └── openai-compat.ts      # default HTTP provider (plain fetch)
-│   ├── engines/
-│   │   ├── research-engine.ts    # W13 [EXECUTE_RESEARCH] handler
-│   │   └── evolution-engine.ts   # W10 [WRITE_EXTENSION] handler
-│   └── prompts/                  # W0, W1–W17, C0, worker-kernels
+├── AGENTS.md                    # design philosophy, boundary, reading order
+├── LICENSE                      # MIT
+├── README.md                    # this file
+├── .editorconfig                # 2-space indent, LF, UTF-8
+├── biome.json                   # formatter + linter config
+├── package.json                 # bin, exports, scripts, engines.bun
+├── tsconfig.json                # strict, ESNext, no DOM lib
 ├── bin/
-│   └── multimind.ts              # CLI entry point
+│   └── multimind.ts             # CLI entry (think, config, status, eval)
+├── src/
+│   ├── index.ts                 # public API surface (barrel)
+│   ├── types.ts                 # ThinkingInput, ThinkingOutput, WorkerOutput
+│   ├── judge.ts                 # calibrated rubric, judgeThinking(), parseJudgeResponse
+│   ├── consolidator.ts          # worker outputs → heads-up (5 public exports)
+│   ├── debug-store.ts           # run records for post-hoc inspection
+│   ├── config-store.ts          # ~/.config/multimind/config.json
+│   ├── pipeline/
+│   │   └── run.ts               # the thinking orchestrator (W0 → workers → C0 → consolidator)
+│   ├── llm/
+│   │   ├── provider.ts          # LLMProvider interface
+│   │   └── openai-compat.ts     # default HTTP provider (plain fetch)
+│   ├── engines/
+│   │   ├── research-engine.ts   # W13 [EXECUTE_RESEARCH] handler
+│   │   ├── evolution-engine.ts  # W10/W12 [WRITE_EXTENSION] / [SYNTHETIC_TEST] handler
+│   │   └── index.ts             # namespace re-exports
+│   └── prompts/                 # W0, W1–W17, C0, worker-kernels
 ├── tests/
-│   ├── pipeline.test.ts          # 7 tests: pipeline orchestrator with mock LLM
-│   ├── contract.test.ts          # 11 tests: package shape, prompt coverage, schema
-│   └── dataset.test.ts           # 4 tests: dataset well-formedness
+│   ├── pipeline.test.ts         # 6 tests: pipeline orchestrator with mock LLM
+│   ├── contract.test.ts         # 13 tests: package shape, prompt coverage, boundary
+│   ├── dataset.test.ts          # 4 tests: eval dataset well-formedness
+│   ├── provider.test.ts         # 7 tests: OpenAICompatProvider with mocked fetch
+│   ├── consolidator.test.ts     # 16 tests: the 5 consolidator public exports
+│   ├── scorer.test.ts           # 13 tests: judge prompt and judgeThinking
+│   ├── engines.test.ts          # 24 tests: research + evolution engines
+│   ├── cli.test.ts              # 10 tests: bin/multimind.ts as subprocess
+│   ├── helpers.ts               # shared mockFetch + chatCompletionResponse
+│   └── fixtures/
+│       └── cli-input.json
 ├── evals/
-│   ├── dataset.jsonl             # 50 reaction-eval cases
-│   ├── runner.ts                 # eval driver (calls runThinkingPipeline for each case)
-│   ├── scorer.ts                 # LLM-as-judge
-│   └── runs/                     # per-case run records (gitignored)
-├── package.json
-├── tsconfig.json
-└── README.md
+│   ├── dataset.jsonl            # 52 reaction-eval cases
+│   └── runner.ts                # eval driver
+└── .test-runs/                  # per-test run records (gitignored)
 ```
 
 ---
@@ -429,7 +443,7 @@ multimind-cli/
 
 ```bash
 bun run ci               # typecheck + lint + tests (one command)
-bun test                 # 70 tests + 1 live-LLM-gated (set MULTIMIND_TEST_LIVE=1)
+bun test                 # 95 tests + 1 live-LLM-gated (set MULTIMIND_TEST_LIVE=1)
 bun run lint             # biome check (read-only)
 bun run format           # biome format --write
 bun typecheck            # tsc --noEmit (no behaviour change)
@@ -463,7 +477,7 @@ To add a new LLM provider:
 - OpenAI-compatible HTTP provider (default, no SDK)
 - Provider abstraction (`LLMProvider` interface) for custom implementations
 - CLI with `think`, `config`, `eval`, and `status` subcommands
-- **70 tests + 1 live-LLM-gated test, all passing** (pipeline, contract, dataset, provider, consolidator, scorer, CLI)
+- **95 tests + 1 live-LLM-gated test, all passing** (pipeline, contract, dataset, provider, consolidator, scorer, engines, CLI)
 - User-specific prompt extensions in `src/prompts-extensions/` (gitignored, per-user)
 - Local CI: `bun run ci` runs typecheck + lint + tests in one command
 
