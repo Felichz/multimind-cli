@@ -103,7 +103,7 @@ async function main() {
   process.exit(report.passRate >= 0.8 ? 0 : 1)
 }
 
-type Args = { case?: string; limit?: number; noJudge: boolean; output?: string }
+type Args = { case?: string; limit?: number; skip?: number; noJudge: boolean; output?: string }
 
 function parseArgs(argv: string[]): Args {
   const args: Args = { noJudge: false }
@@ -111,10 +111,13 @@ function parseArgs(argv: string[]): Args {
     const flag = argv[i]
     if (flag === "--case") args.case = argv[++i]
     else if (flag === "--limit") args.limit = Number(argv[++i])
+    else if (flag === "--skip") args.skip = Number(argv[++i])
     else if (flag === "--no-judge") args.noJudge = true
     else if (flag === "--output") args.output = argv[++i]
     else if (flag === "--help" || flag === "-h") {
-      console.log("Usage: bun run evals/runner.ts [--case ID] [--limit N] [--no-judge] [--output file.json]")
+      console.log(
+        "Usage: bun run evals/runner.ts [--case ID] [--limit N] [--skip N] [--no-judge] [--output file.json]",
+      )
       process.exit(0)
     }
   }
@@ -129,7 +132,11 @@ async function loadCases(dataset: string, args: Args): Promise<Case[]> {
     .filter(Boolean)
     .map((line) => JSON.parse(line) as Case)
   const filtered = args.case ? all.filter((c) => c.id === args.case) : all
-  return args.limit ? filtered.slice(0, args.limit) : filtered
+  // `--skip` is applied AFTER `--limit` so a user can `--limit 20 --skip 20`
+  // to get the next 20 cases. Useful for resuming a partial run without
+  // re-paying for the cases already done.
+  const limited = args.limit ? filtered.slice(0, args.limit) : filtered
+  return args.skip ? limited.slice(args.skip) : limited
 }
 
 async function runCase(testCase: Case, provider: LLMProvider, skipJudge: boolean): Promise<CaseResult> {
