@@ -373,7 +373,7 @@ The CLI ships with one default provider: `OpenAICompatProvider`, a plain `fetch`
 To add a custom provider (e.g. for streaming, Anthropic direct, a local model with a non-standard wire format), implement `LLMProvider`:
 
 ```ts
-import type { LLMProvider, LLMRequest, LLMResponse } from "multimind-cli/llm/provider"
+import { runThinkingPipeline, type LLMProvider, type LLMRequest, type LLMResponse } from "multimind-cli"
 
 class AnthropicDirectProvider implements LLMProvider {
   readonly name = "anthropic-direct"
@@ -382,8 +382,6 @@ class AnthropicDirectProvider implements LLMProvider {
   }
 }
 
-// Wire it in
-import { runThinkingPipeline } from "multimind-cli"
 const result = await runThinkingPipeline(input, new AnthropicDirectProvider())
 ```
 
