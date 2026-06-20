@@ -161,29 +161,16 @@ async function runCase(testCase: Case, provider: LLMProvider, skipJudge: boolean
     }
   }
 
-  // The pipeline produces a heads-up (scaffolding for a downstream LLM).
-  // The judge is calibrated to score the user-facing response, not the
-  // raw heads-up. Run the synthesis step before the judge so the score
-  // reflects the same thing an end user would actually see.
-  const recentHistory = input.history
-    .filter((m) => m.info.role === "user" || m.info.role === "assistant")
-    .map((m) => {
-      const text = m.parts.filter((p) => p.type === "text").map((p) => p.text).join("")
-      return `[${m.info.role === "user" ? "User" : "Assistant"}]: ${text}`
-    })
-    .join("\n\n")
-  let finalResponse = pipelineResult.thinking
-  if (!skipJudge && pipelineResult.thinking) {
-    const { synthesizeFinalResponse } = await import("../src/pipeline/run")
-    finalResponse = await synthesizeFinalResponse(provider, pipelineResult.thinking, recentHistory)
-  }
-
+  // The pipeline produces a heads-up. The CLI is for thinking, not for
+  // answering. The judge scores the heads-up directly — that is the
+  // CLI's output, and the consumer is responsible for any further
+  // post-processing (synthesis, UI, etc.).
   const pipelineMs = pipelineResult.totalDurationMs
-  let score = finalResponse ? (finalResponse.length > 50 ? 80 : 30) : 0
+  let score = pipelineResult.thinking ? (pipelineResult.thinking.length > 50 ? 80 : 30) : 0
   let judgeReason = skipJudge ? "judge skipped" : "(no judge)"
   let judgeMissing: string[] = []
 
-  if (!skipJudge && finalResponse) {
+  if (!skipJudge && pipelineResult.thinking) {
     const judgeResult = await judgeThinking(provider, {
       caseID: testCase.id,
       thinking: pipelineResult.thinking,
@@ -211,7 +198,7 @@ async function runCase(testCase: Case, provider: LLMProvider, skipJudge: boolean
     pipelineMs,
     judgeMs: 0,
     totalMs: Date.now() - startedAt,
-    thinking: finalResponse,
+    thinking: pipelineResult.thinking,
   }
 }
 

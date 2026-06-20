@@ -50,6 +50,16 @@ describe("public API", () => {
     expect(mod.Evolution).toBeDefined()
   })
 
+  test("the library does NOT export synthesizeFinalResponse (the consumer's job)", async () => {
+    // The CLI returns a heads-up. Turning it into a user-facing
+    // response is the consumer's responsibility — a downstream LLM,
+    // an opencode agent, a Codex skill. Keeping synthesis out of the
+    // CLI preserves a clean boundary: the CLI is for thinking, the
+    // consumer is for answering.
+    const mod = await import("../src/index")
+    expect((mod as any).synthesizeFinalResponse).toBeUndefined()
+  })
+
   test("OpenAICompatProvider is constructible and satisfies LLMProvider", async () => {
     const { OpenAICompatProvider } = await import("../src/llm/openai-compat")
     const provider = new OpenAICompatProvider({ baseUrl: "http://localhost:9999/v1" })

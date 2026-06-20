@@ -73,19 +73,6 @@ export type PipelineOptions = {
   signal?: AbortSignal
 }
 
-const FINAL_RESPONSE_SYSTEM = `You are a senior engineering agent who just received a "Subconscious Heads-Up" from your background thinking layer. The heads-up is a private completion contract: it tells you what the right path is, what the evidence gates are, and what the next concrete step is.
-
-Your job now: produce the next user-facing response. Use the heads-up as your internal guidance, not as a script to copy.
-
-Rules:
-- Do not mention the heads-up, the C0 contract, the worker names, or the meta-process to the user.
-- Do not start with "I" or with meta-language about the situation.
-- Lead with the substantive answer: the decision, the artifact, the next step, or the concrete question.
-- Cite the specific evidence gate or file path or command the user would need to verify your claim.
-- End with a default next step, not a permission-seeking question.
-- Keep it tight. The heads-up is long because it has to be thorough; your response should be short because the user has limited attention.
-- If the heads-up says the work is not yet done, say what the next concrete step is and what evidence will close it.`
-
 export async function runThinkingPipeline(
   input: ThinkingInput,
   provider: LLMProvider,
@@ -269,39 +256,6 @@ export async function runThinkingPipeline(
     totalDurationMs: Date.now() - startedAt,
     runRecordPath: runRecordPath(runsDir, run),
   }
-}
-
-/**
- * Take a heads-up (the output of `runThinkingPipeline`) and produce a
- * user-facing response. This is a separate LLM call that the original
- * opencode plugin handled implicitly: the heads-up was injected as
- * synthetic context, the agent's next turn (handled by the host LLM)
- * produced the user-visible message.
- *
- * This function is exposed so consumers (and the eval runner) can do
- * the same thing explicitly when the host LLM is not in the loop.
- */
-export async function synthesizeFinalResponse(
-  provider: LLMProvider,
-  headsUp: string,
-  recentHistory: string,
-  model?: { providerID: string; modelID: string },
-  options: { timeoutMs?: number; signal?: AbortSignal } = {},
-): Promise<string> {
-  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
-  return provider.complete(
-    {
-      system: FINAL_RESPONSE_SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: `Conversation history:\n${recentHistory}\n\nSubconscious heads-up (private — do not mention to user):\n${headsUp}\n\nProduce the next user-facing response.`,
-        },
-      ],
-      ...(model ? { model } : {}),
-    },
-    options.signal ?? AbortSignal.timeout(timeoutMs),
-  ).then((response) => response.content)
 }
 
 // ---------- helpers ----------

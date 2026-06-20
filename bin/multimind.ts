@@ -12,11 +12,12 @@
  *
  * The CLI is stateless and provider-agnostic. It reads context, runs the
  * thinking pipeline, writes the result. No trigger modes, no per-session
- * counters, no proprietary SDK.
+ * counters, no proprietary SDK, no synthesis of user-facing responses —
+ * that is the consumer's job.
  */
 
 import path from "node:path"
-import { runThinkingPipeline, synthesizeFinalResponse, OpenAICompatProvider } from "../src/index"
+import { runThinkingPipeline, OpenAICompatProvider } from "../src/index"
 import { configFilePath, loadConfig, saveConfig } from "../src/config-store"
 import type { ThinkingInput, ThinkingOutput } from "../src/types"
 
@@ -24,7 +25,6 @@ const USAGE = `multimind — background thinking pipeline
 
 Usage:
   multimind think [--input file] [--output file] [--model provider/model]
-  multimind answer [--input file] [--output file] [--model provider/model]
   multimind config [show | set <key> <value> | path | init]
   multimind status
   multimind eval [--case ID] [--limit N] [--no-judge] [--output file]
@@ -33,10 +33,10 @@ Usage:
 to feed it as context to a host LLM (e.g. an opencode agent) which
 then produces the user-facing response as part of its next turn.
 
-"answer" returns a tight user-facing response. It runs the pipeline
-plus a downstream LLM step that turns the heads-up into a message
-suitable for direct delivery. Use this when no host LLM is in the
-loop.
+The CLI does NOT produce user-facing responses. That post-processing
+is the consumer's responsibility — the opencode plugin, the host
+agent, the downstream LLM, whatever wraps this CLI. See AGENTS.md for
+the philosophy behind that boundary.
 
 Input: JSON object on stdin or --input, with shape:
   {
@@ -83,7 +83,7 @@ async function main() {
     return
   }
 
-  if (command !== "think" && command !== "answer") {
+  if (command !== "think") {
     console.error(`Unknown command: ${command}\n\n${USAGE}`)
     process.exit(1)
   }
@@ -92,32 +92,8 @@ async function main() {
   const model = input.model ?? process.env.MULTIMIND_MODEL
 
   const provider = new OpenAICompatProvider()
-  const pipelineResult = await runThinkingPipeline({ ...input, model }, provider)
-
-  if (command === "answer") {
-    // The "answer" command runs the full flow: pipeline (heads-up) +
-    // a downstream LLM step that turns the heads-up into a tight
-    // user-facing message. In an opencode-style integration the host's
-    // LLM does this step naturally as part of its next turn; the
-    // "answer" command is the standalone equivalent.
-    const recentHistory = (input.history ?? [])
-      .filter((m) => m.info.role === "user" || m.info.role === "assistant")
-      .map((m) => {
-        const text = m.parts.filter((p) => p.type === "text").map((p) => p.text).join("")
-        return `[${m.info.role === "user" ? "User" : "Assistant"}]: ${text}`
-      })
-      .join("\n\n")
-    const synthesized = await synthesizeFinalResponse(
-      provider,
-      pipelineResult.thinking,
-      recentHistory,
-      model ? { providerID: model.split("/")[0]!, modelID: model.split("/").slice(1).join("/") } : undefined,
-    )
-    await writeOutput(args, { ...pipelineResult, thinking: synthesized })
-    return
-  }
-
-  await writeOutput(args, pipelineResult)
+  const result = await runThinkingPipeline({ ...input, model }, provider)
+  await writeOutput(args, result)
 }
 
 async function runConfig(args: string[]): Promise<void> {

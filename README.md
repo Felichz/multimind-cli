@@ -216,21 +216,34 @@ echo '{"history": [...], "workers": ["W2", "W4"]}' | multimind think
 # Run evals
 multimind eval [--case ID] [--limit N] [--no-judge] [--output report.json]
 
+# Provider setup
+multimind config init                  # interactive wizard
+multimind config show                  # show resolved config
+multimind config path                  # print config file path
+multimind config set apiKey "sk-..."   # set a value
+
 # Check the provider
 multimind status
 ```
 
+The CLI has one job: take context, return a heads-up. The heads-up is the structured thinking a downstream LLM (the consumer) should see as context. The CLI does not produce user-facing messages — that is the consumer's responsibility, by design. See `AGENTS.md` for the full philosophy.
+
 ### As a library
 
 ```ts
-import { runThinkingPipeline, OpenCodeServeProvider } from "multimind-cli"
+import { runThinkingPipeline, OpenAICompatProvider } from "multimind-cli"
 
-const provider = new OpenCodeServeProvider({ baseUrl: "http://127.0.0.1:4096" })
+const provider = new OpenAICompatProvider()
 const result = await runThinkingPipeline(
   { history: [...], sessionID: "my-session" },
   provider,
 )
 
+// `result.thinking` is the heads-up — the structured thinking a
+// downstream LLM (the consumer) should see as context. The CLI does
+// not produce user-facing responses; the consumer is responsible for
+// turning the heads-up into whatever message format it needs. See
+// AGENTS.md for the philosophy behind that boundary.
 console.log(result.thinking)
 ```
 
@@ -265,7 +278,7 @@ type Message = {
 
 ```ts
 type ThinkingOutput = {
-  thinking: string                          // the synthesised delivery (markdown)
+  thinking: string                          // the heads-up (markdown)
   workers: WorkerResult[]                   // what fired, in order
   routerDecision: "ACTIVATE" | "SKIP"
   c0Decision?: "safe_to_end" | "continue" | "blocked" | "missing"
@@ -324,7 +337,7 @@ multimind-cli/
 │   │   └── run.ts                # the thinking orchestrator (W0, workers, C0, engines)
 │   ├── llm/
 │   │   ├── provider.ts           # LLMProvider interface
-│   │   └── opencode-serve.ts     # OpenCode SDK implementation
+│   │   └── openai-compat.ts      # default HTTP provider (plain fetch)
 │   ├── engines/
 │   │   ├── research-engine.ts    # W13 [EXECUTE_RESEARCH] handler
 │   │   └── evolution-engine.ts   # W10 [WRITE_EXTENSION] handler
@@ -333,7 +346,7 @@ multimind-cli/
 │   └── multimind.ts              # CLI entry point
 ├── tests/
 │   ├── pipeline.test.ts          # 7 tests: pipeline orchestrator with mock LLM
-│   ├── contract.test.ts          # 10 tests: package shape, prompt coverage, schema
+│   ├── contract.test.ts          # 11 tests: package shape, prompt coverage, schema
 │   └── dataset.test.ts           # 4 tests: dataset well-formedness
 ├── evals/
 │   ├── dataset.jsonl             # 50 reaction-eval cases
@@ -355,7 +368,7 @@ bun typecheck            # tsc --noEmit
 bun run bin/multimind.ts eval --limit 1   # smoke against a real LLM
 ```
 
-The pipeline tests use a scripted `LLMProvider` so they don't need a real LLM. The eval suite needs an LLM provider (default: `opencode serve` running on `:4096`).
+The pipeline tests use a scripted `LLMProvider` so they don't need a real LLM. The eval suite needs a configured `OpenAICompatProvider` (set `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` or run `multimind config init`).
 
 To add a new worker:
 
@@ -381,7 +394,7 @@ To add a new LLM provider:
 - 50-case reaction eval dataset
 - OpenAI-compatible HTTP provider (default, no SDK)
 - Provider abstraction (LLMProvider interface) for custom implementations
-- CLI with `think` and `eval` subcommands
+- CLI with `think`, `config`, `eval`, and `status` subcommands
 - 22 unit + contract tests, all passing
 - User-specific prompt extensions in `src/prompts-extensions/` (gitignored, per-user)
 

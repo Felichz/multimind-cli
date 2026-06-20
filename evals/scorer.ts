@@ -1,17 +1,23 @@
 /**
- * LLM-as-judge scorer for the reaction eval.
+ * LLM-as-judge scorer for the thinking pipeline.
  *
- * This is the calibrated judge prompt that was used by the reaction eval
- * in the opencode monorepo. The earlier naive version in this package
- * gave scores 18-38 on cases that scored 85+ with this prompt. The
- * difference is the scoring bands, the strictness rules, the explicit
- * "response-only turn" context, and the structured JSON output.
+ * The input is a "Subconscious Heads-Up" — the structured thinking the
+ * CLI returns from `runThinkingPipeline`. It is private context for a
+ * downstream LLM (the consumer), not a user-facing response. The judge
+ * scores whether the thinking:
  *
- * The judge is intentionally calibrated for the "Subconscious Heads-Up"
- * use case: the input is a notification from the background thinking
- * layer, not a full agent execution. It scores whether the response
- * describes the right path with professional autonomy, not whether it
- * actually executed tools.
+ *   1. Identifies the right risks, gaps, and missed professional steps
+ *   2. Names concrete evidence gates, file paths, and decision criteria
+ *   3. Reduces cognitive load on whoever reads it
+ *   4. Avoids the must-avoid failure modes
+ *
+ * The judge does NOT score user-facing polish (length, tone, format).
+ * The CLI returns thinking; the consumer turns it into a response.
+ * The CLI's job ends at the thinking. The judge tests that job.
+ *
+ * This is the same calibrated rubric that scored 84-94 on the
+ * standalone (synthesis-free) case in the opencode monorepo, adapted
+ * to score the heads-up directly instead of the synthesized response.
  */
 
 import type { LLMProvider } from "../src/llm/provider"
@@ -37,42 +43,41 @@ export type JudgeResult = {
   latencyMs: number
 }
 
-const JUDGE_PROMPT = (input: JudgeInput): string => `You are a strict black-box judge for a main coding agent reaction.
+const JUDGE_PROMPT = (input: JudgeInput): string => `You are a strict black-box judge for a "Subconscious Heads-Up" produced by a background thinking pipeline.
 
-Evaluate only the final assistant response quality. Do not care which internal architecture produced it.
+The heads-up is private, structured context that a downstream LLM (the consumer) will read to produce a user-facing response. It is not a response to the user. Judge it on whether it equips a senior engineer to act, not on whether it is polite, brief, or user-facing.
 
 Benchmark setup for the judge:
-- The final assistant response was produced in a response-only turn. The assistant was asked to say what it thinks and what it would do once tool use is available; it was not allowed to execute tools, modify files, or claim new command results during that turn.
-- Do not penalize the response for not actually editing files or running tests.
-- Do penalize the response if it hides behind that constraint, becomes passive, asks for broad repo context without a real blocker, or fails to provide a concrete professional next response for the user-visible situation.
-- A strong response can describe the exact implementation path, artifacts to inspect/change, assumptions, tests, evidence gates, and decision criteria without falsely claiming that those actions already happened.
-- When exact repository paths or existing artifacts cannot be verified because tools are unavailable, do not require a real confirmed path. Reward a clearly marked plausible repo-relative target slot or ready-to-add artifact shape. Penalize vague "I would find the eval/test/logs later" language.
-- In response-only turns, before/after evidence means a concrete protocol, command pair, evidence slots, and run-record template. Do not require completed before/after results, because the assistant was not allowed to run tools.
+- The heads-up is produced by running a small set of cognitive lenses (W0 routing, W1-W17 workers, C0 synthesis) over the conversation. The consumer is responsible for any synthesis into a user-facing message.
+- A strong heads-up names concrete risks, gaps, evidence gates, file paths, command pairs, decision criteria, and next steps — even when those things have not been verified yet.
+- Heads-ups are intentionally long and structured. Do not penalize length. Penalize vagueness, missing professional steps, and reliance on user cognitive load to fill gaps.
+- "I would find the eval/test/logs later" is a failure. A clearly marked plausible target slot, ready-to-add artifact shape, or named protocol is a pass.
+- The heads-up may include worker names, C0 markers (safe_to_end / continue / blocked), and meta-process language. These are private to the consumer; do not penalize them.
 
 Score on a 0-100 scale:
 - 0-9: harmful, evasive, or actively contrary to the expected behavior.
-- 10-24: mostly misses the point; may contain generic apology/agreement but no useful professional action.
+- 10-24: mostly misses the point; may contain generic agreement but no useful professional action.
 - 25-39: weakly related; catches a surface issue but misses the main principle or professional operating method.
-- 40-59: partial; identifies the theme but leaves major gaps, vague next steps, or too much cognitive load on the user.
-- 60-74: decent but not pass-worthy; useful response with at least one critical missing behavior or risk.
+- 40-59: partial; identifies the theme but leaves major gaps, vague next steps, or too much cognitive load on the consumer.
+- 60-74: decent but not pass-worthy; useful content with at least one critical missing behavior or risk.
 - 75-84: solid but below a strong gate; covers much of the expected behavior but still lacks some professional completeness, evidence, or autonomy.
 - 85-95: strong pass; situated, autonomous, calibrated, low-friction, and clearly explains why the approach is professional.
 - 96-100: exceptional top 5%; all strong-pass criteria plus additional useful value beyond the expected behavior.
 
 Value-added bonus:
 - If score is 96-100, set "valueAdded" to score - 95, an integer from 1 to 5.
-- Award this only for concrete extra value: a better iteration strategy, sharper risk gate, clearer user debug evidence, or a lower-friction path that was not explicitly demanded.
+- Award this only for concrete extra value: a better iteration strategy, sharper risk gate, clearer debug evidence, or a lower-friction path that was not explicitly demanded.
 - If score is below 96, valueAdded must be 0.
 
 Strictness rules:
-- Do not award 80+ if the response violates any must-avoid item.
+- Do not award 80+ if the heads-up violates any must-avoid item.
 - Do not award 80+ for merely repeating the user's correction back without an operational plan.
-- Do not award 90+ unless the response shows professional autonomy: it reduces user cognitive load, defines evidence, and makes the next step clear.
+- Do not award 90+ unless the heads-up shows professional autonomy: it reduces consumer cognitive load, defines evidence gates, and makes the next step clear.
 - Apply eval/self-improvement artifact requirements only when the Expected behavior or latest user message explicitly asks for evals, tests, benchmarks, readiness, proof, implementation verification, or system improvement artifacts. Do not apply them to user-facing cognitive-load/debug handoff cases whose expected behavior is a screenshot/status/checklist/PR-link workflow.
-- For true eval/self-improvement cases, do not award 85+ unless the response includes an operational loop: fail-first artifact or target slot, expected baseline failure, same-case before/after rerun, quick regression gate, and run metadata. The path may be marked unverified when tools are unavailable.
-- Do not award 90+ for true eval/self-improvement cases unless the response names the first artifact, includes a ready-to-add artifact shape, states a decision table for accept/reject/regression outcomes, and provides a run-record template or equivalent metadata capture plan.
-- Do not award 96+ unless the response adds concrete extra leverage beyond pass: sharper artifact naming, lower-friction user evidence, clearer rollback/stop conditions, or a better fast-vs-full test strategy.
-- Prefer lower scores when the response sounds polished but does not materially improve the delivery workflow.
+- For true eval/self-improvement cases, do not award 85+ unless the heads-up includes an operational loop: fail-first artifact or target slot, expected baseline failure, same-case before/after rerun, quick regression gate, and run metadata. The path may be marked unverified when verification is unavailable.
+- Do not award 90+ for true eval/self-improvement cases unless the heads-up names the first artifact, includes a ready-to-add artifact shape, states a decision table for accept/reject/regression outcomes, and provides a run-record template or equivalent metadata capture plan.
+- Do not award 96+ unless the heads-up adds concrete extra leverage beyond pass: sharper artifact naming, lower-friction evidence, clearer rollback/stop conditions, or a better fast-vs-full test strategy.
+- Prefer lower scores when the heads-up sounds polished but does not materially improve the delivery workflow.
 
 Return only JSON:
 {
@@ -98,8 +103,8 @@ ${input.expectedQuality}
 Must avoid:
 ${input.mustAvoid.map((entry) => "- " + entry).join("\n")}
 
-Final assistant response:
-${input.thinking || "(empty response — system returned no thinking)"}
+Subconscious heads-up:
+${input.thinking || "(empty heads-up — pipeline returned no thinking)"}
 
 JSON:
 `

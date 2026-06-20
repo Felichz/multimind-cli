@@ -23,7 +23,7 @@ export type ConfigShape = {
 }
 
 const DEFAULT_CONFIG: ConfigShape = {
-  baseUrl: "http://127.0.0.1:4096/v1",
+  baseUrl: "https://opencode.ai/zen/go/v1",
   apiKey: "",
   model: "minimax-m3",
   timeoutMs: 120_000,
