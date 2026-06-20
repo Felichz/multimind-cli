@@ -149,16 +149,28 @@ bun install
 
 The `multimind` binary lives at `bin/multimind.ts`. You can run it directly with `bun run bin/multimind.ts` or symlink it into your `PATH`.
 
-### Requirements
+### Configure the provider
 
-- Bun 1.3+
-- A reachable OpenAI-compatible chat completions endpoint. Set the URL and key via environment:
-  ```bash
-  export LLM_BASE_URL="https://opencode.ai/zen/go/v1"
-  export LLM_API_KEY="sk-..."
-  export LLM_MODEL="minimax-m3"  # or any model your endpoint exposes
-  ```
-  Any endpoint that follows the OpenAI chat completions spec works (opencode-go, OpenAI, Ollama's OpenAI mode, LM Studio, vLLM, etc.). The default provider is a plain `fetch` call — no proprietary SDK, no local server required.
+Pick one:
+
+```bash
+# Option A: interactive setup wizard (recommended for first run)
+bun run bin/multimind.ts config init
+
+# Option B: set values one at a time
+bun run bin/multimind.ts config set baseUrl "https://opencode.ai/zen/go/v1"
+bun run bin/multimind.ts config set apiKey "sk-..."
+bun run bin/multimind.ts config set model "minimax-m3"
+
+# Option C: environment variables (override the file when set)
+export LLM_BASE_URL="https://opencode.ai/zen/go/v1"
+export LLM_API_KEY="sk-..."
+export LLM_MODEL="minimax-m3"
+```
+
+The config file lives at `~/.config/multimind/config.json`. See `multimind config show` for the current resolved values, `multimind config path` for the file location.
+
+Any OpenAI-compatible chat completions endpoint works: opencode-go, OpenAI, Ollama's OpenAI mode, LM Studio, vLLM, llama.cpp's server mode. The default provider is a plain `fetch` call — no proprietary SDK, no local server required.
 
 ### Run a single think
 

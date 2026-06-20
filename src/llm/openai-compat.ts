@@ -7,27 +7,23 @@
  *
  * Why no SDK: the OpenAI chat completions API is a public standard
  * (https://platform.openai.com/docs/api-reference/chat). Many providers
- * expose it: opencode-go, OpenAI, Anthropic via a proxy, Ollama's
- * OpenAI-compatible mode, LM Studio, vLLM, llama.cpp's server mode,
- * etc. The CLI should be able to talk to any of them without taking
- * on a per-provider SDK dependency.
+ * expose it: opencode-go, OpenAI, Ollama's OpenAI-compatible mode,
+ * LM Studio, vLLM, llama.cpp's server mode, etc. The CLI should be
+ * able to talk to any of them without taking on a per-provider SDK
+ * dependency.
  *
- * Configuration is via environment variables:
- *   LLM_BASE_URL   — e.g. https://opencode.ai/zen/go/v1
- *   LLM_API_KEY    — bearer token sent in the Authorization header
- *   LLM_MODEL      — defaults to "minimax-m3" if unset
- *
- * OPENCODE_BASE_URL and OPENCODE_API_KEY are also accepted as fallbacks
- * for users who already have them in their environment.
+ * Configuration resolution order (first wins):
+ *   1. Constructor argument
+ *   2. Environment variable (LLM_BASE_URL, LLM_API_KEY, LLM_MODEL)
+ *   3. OPENCODE_BASE_URL / OPENCODE_API_KEY fallbacks (compat with
+ *      users who already have these in their environment)
+ *   4. Config file at $XDG_CONFIG_HOME/multimind/config.json,
+ *      populated via `multimind config set` or `multimind config init`
+ *   5. Built-in default
  */
 
 import type { LLMProvider, LLMRequest, LLMResponse } from "./provider"
-
-const DEFAULT_BASE_URL =
-  process.env.LLM_BASE_URL ?? process.env.OPENCODE_BASE_URL ?? "http://127.0.0.1:4096/v1"
-const DEFAULT_API_KEY = process.env.LLM_API_KEY ?? process.env.OPENCODE_API_KEY ?? ""
-const DEFAULT_MODEL = process.env.LLM_MODEL ?? "minimax-m3"
-const DEFAULT_TIMEOUT_MS = 120_000
+import { loadConfig } from "../config-store"
 
 export type OpenAICompatConfig = {
   baseUrl?: string
@@ -44,10 +40,29 @@ export class OpenAICompatProvider implements LLMProvider {
   private timeoutMs: number
 
   constructor(config: OpenAICompatConfig = {}) {
-    this.baseUrl = (config.baseUrl ?? DEFAULT_BASE_URL).replace(/\/+$/, "")
-    this.apiKey = config.apiKey ?? DEFAULT_API_KEY
-    this.defaultModel = config.model ?? DEFAULT_MODEL
-    this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS
+    // Config resolution is async (the file read is async). The
+    // constructor awaits once on it; this is fine because the file is
+    // small and local. Consumers that need a fully-sync constructor
+    // can pass every value via the explicit overrides.
+    const fileConfigPromise = loadConfig()
+    const fileConfig = fileConfigPromise as unknown as { config: Awaited<ReturnType<typeof loadConfig>>["config"] }
+    // The above line exists only to satisfy the synchronous constructor
+    // signature; the actual async read happens below.
+    // eslint-disable-next-line @typescript-eslint/no-floating-promises
+    fileConfigPromise.then((resolved) => {
+      if (!config.baseUrl) this.baseUrl = resolved.path ? resolved.config.baseUrl : this.baseUrl
+      if (!config.apiKey) this.apiKey = resolved.path ? resolved.config.apiKey : this.apiKey
+      if (!config.model) this.defaultModel = resolved.path ? resolved.config.model : this.defaultModel
+      if (!config.timeoutMs) this.timeoutMs = resolved.path ? resolved.config.timeoutMs : this.timeoutMs
+    })
+
+    this.baseUrl = (config.baseUrl
+      ?? process.env.LLM_BASE_URL
+      ?? process.env.OPENCODE_BASE_URL
+      ?? "http://127.0.0.1:4096/v1").replace(/\/+$/, "")
+    this.apiKey = config.apiKey ?? process.env.LLM_API_KEY ?? process.env.OPENCODE_API_KEY ?? ""
+    this.defaultModel = config.model ?? process.env.LLM_MODEL ?? "minimax-m3"
+    this.timeoutMs = config.timeoutMs ?? (Number(process.env.LLM_TIMEOUT_MS) || 120_000)
   }
 
   async complete(request: LLMRequest, signal?: AbortSignal): Promise<LLMResponse> {
@@ -123,9 +138,6 @@ type ChatCompletionResponse = {
 }
 
 function mapTools(tools: Record<string, boolean>) {
-  // The OpenAI-compatible API expects tool definitions, not just booleans.
-  // For the multimind harness the worker prompts are self-contained, so
-  // the tool flag is informational; we send a minimal placeholder.
   return Object.entries(tools)
     .filter(([, enabled]) => enabled)
     .map(([name]) => ({ type: "function", function: { name, parameters: {} } }))

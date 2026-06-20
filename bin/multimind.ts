@@ -6,23 +6,27 @@
  *   multimind think < input.json > output.json
  *   echo '{"history": [...]}' | multimind think
  *   multimind think --input ctx.json --output thinking.json
+ *   multimind config [show | set <key> <value> | path | init]
  *   multimind status
  *   multimind eval [--case ID] [--limit N] [--no-judge] [--output file]
  *
  * The CLI is stateless and provider-agnostic. It reads context, runs the
  * thinking pipeline, writes the result. No trigger modes, no per-session
- * counters, no OpenCode-specific code.
+ * counters, no proprietary SDK.
  */
 
 import path from "node:path"
 import { runThinkingPipeline, OpenAICompatProvider } from "../src/index"
+import { configFilePath, loadConfig, saveConfig } from "../src/config-store"
 import type { ThinkingInput, ThinkingOutput } from "../src/types"
 
 const USAGE = `multimind — background thinking pipeline
 
 Usage:
   multimind think [--input file] [--output file] [--model provider/model]
+  multimind config [show | set <key> <value> | path | init]
   multimind status
+  multimind eval [--case ID] [--limit N] [--no-judge] [--output file]
 
 Input: JSON object on stdin or --input, with shape:
   {
@@ -33,6 +37,12 @@ Input: JSON object on stdin or --input, with shape:
   }
 
 Output: JSON object with { thinking, workers, routerDecision, c0Decision?, notes, totalDurationMs }
+
+Config subcommands:
+  multimind config          # show current resolved config (env + file)
+  multimind config set <k> <v>  # set baseUrl / apiKey / model / timeoutMs
+  multimind config path     # print the config file path
+  multimind config init     # interactive setup wizard
 `
 
 async function main() {
@@ -47,6 +57,11 @@ async function main() {
   if (command === "status") {
     const provider = new OpenAICompatProvider()
     console.log(JSON.stringify({ provider: provider.name }, null, 2))
+    return
+  }
+
+  if (command === "config") {
+    await runConfig(args.slice(1))
     return
   }
 
@@ -70,6 +85,75 @@ async function main() {
   const result = await runThinkingPipeline({ ...input, model }, provider)
 
   await writeOutput(args, result)
+}
+
+async function runConfig(args: string[]): Promise<void> {
+  const sub = args[0]
+
+  if (!sub || sub === "show") {
+    const { config, path: filePath } = await loadConfig()
+    console.log(JSON.stringify({ config, source: filePath ?? "(defaults)" }, null, 2))
+    return
+  }
+
+  if (sub === "path") {
+    console.log(configFilePath())
+    return
+  }
+
+  if (sub === "set") {
+    const key = args[1]
+    const value = args[2]
+    if (!key || value === undefined) {
+      console.error("Usage: multimind config set <key> <value>")
+      console.error("Keys: baseUrl, apiKey, model, timeoutMs")
+      process.exit(1)
+    }
+    if (!["baseUrl", "apiKey", "model", "timeoutMs"].includes(key)) {
+      console.error(`Unknown key: ${key}. Valid keys: baseUrl, apiKey, model, timeoutMs`)
+      process.exit(1)
+    }
+    const patch = key === "timeoutMs" ? { timeoutMs: Number(value) } : { [key]: value }
+    const filePath = await saveConfig(patch)
+    console.log(`Wrote ${key} to ${filePath}`)
+    return
+  }
+
+  if (sub === "init") {
+    await runConfigInit()
+    return
+  }
+
+  console.error(`Unknown config subcommand: ${sub}\n\n${USAGE}`)
+  process.exit(1)
+}
+
+async function runConfigInit(): Promise<void> {
+  const prompts: Array<[string, string]> = [
+    ["baseUrl", "Base URL of OpenAI-compatible endpoint"],
+    ["apiKey", "API key (leave empty if not needed)"],
+    ["model", "Default model (e.g. minimax-m3, gpt-4, llama3)"],
+  ]
+  const patch: Record<string, string | number> = {}
+  for (const [key, label] of prompts) {
+    const answer = await prompt(label + ": ")
+    if (answer) patch[key] = answer
+  }
+  const filePath = await saveConfig(patch)
+  console.log(`\nConfig written to ${filePath}`)
+  console.log("Run `multimind think` to verify the provider is reachable.")
+}
+
+function prompt(question: string): Promise<string> {
+  return new Promise((resolve) => {
+    process.stdout.write(question)
+    const readline = require("node:readline") as typeof import("node:readline")
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false })
+    rl.once("line", (line) => {
+      rl.close()
+      resolve(line.trim())
+    })
+  })
 }
 
 async function readInput(args: string[]): Promise<ThinkingInput> {
