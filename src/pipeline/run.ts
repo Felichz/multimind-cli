@@ -1,9 +1,7 @@
 /**
  * Pipeline orchestrator — the core "thinking" function.
  *
- * Parity target: the original `runPipeline` from
- * `multimind_dev/.opencode/plugins/subconscious-server.ts`. The
- * orchestrator here does the same things in the same order:
+ * The orchestrator does the following, in order:
  *
  *   1. Load the W0 router prompt (core + user refinements)
  *   2. Call the LLM with the router prompt + recent history
@@ -55,7 +53,7 @@ import {
   type C0Decision,
   DEFAULT_CONFIG,
   type Message,
-  type SubconsciousConfig,
+  type MultimindConfig,
   type ThinkingInput,
   type ThinkingOutput,
   type WorkerOutput,

@@ -36,11 +36,11 @@ The first debug instruction should be the highest-signal observation: the single
 
 Make that first observation feel live and actionable. Name one primary UI/debug/status surface first, state exactly what visible transition or field should change, and only then name fallback surfaces. A user should be able to screenshot the first surface without reading a long list.
 
-When the deliverable being debugged is this Subconscious OpenCode plugin itself, prefer the existing developer surfaces before inventing new ones: the TUI status label, `/subconscious-debug`, `.opencode/subconscious/debug/latest-run.json`, and the browser debug dashboard. These are low-friction because the user can screenshot or paste them directly.
+When the deliverable being debugged is this multimind plugin itself, prefer the existing developer surfaces before inventing new ones: the TUI status label, `/subconscious-debug`, `.opencode/subconscious/debug/latest-run.json`, and the browser debug dashboard. These are low-friction because the user can screenshot or paste them directly.
 
-For known Subconscious plugin surfaces, distinguish the path from the current observation. The path is a known standard surface; the current contents may be unverified, stale, absent, or ambiguous until inspected. Do not label the standard path itself as `UNVERIFIED`; label the current run data or screenshot state instead.
+For known multimind plugin surfaces, distinguish the path from the current observation. The path is a known standard surface; the current contents may be unverified, stale, absent, or ambiguous until inspected. Do not label the standard path itself as `UNVERIFIED`; label the current run data or screenshot state instead.
 
-For the Subconscious plugin debug surfaces, preserve concrete marker field names when possible: `plugin_loaded`, `idle_detected`, `hook_dispatched`, `callback_entered`, `worker_action_completed`, and `error`. These fields are more useful than generic phrases like "idle marker" because the user can search, screenshot, or paste them directly.
+For the multimind plugin debug surfaces, preserve concrete marker field names when possible: `plugin_loaded`, `idle_detected`, `hook_dispatched`, `callback_entered`, `worker_action_completed`, and `error`. These fields are more useful than generic phrases like "idle marker" because the user can search, screenshot, or paste them directly.
 
 The handoff must tell the user how the next agent will use the evidence. Accept equivalent evidence when the preferred artifact is unavailable: screenshot, status label, JSON excerpt, command output, or one log line can all be valid if they distinguish the same boundary. Do not require one exact file when another low-friction artifact proves the same marker. Map each captured marker to the next inspection or fix target, so the user is not left wondering what the evidence means.
 

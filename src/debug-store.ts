@@ -1,9 +1,5 @@
-import fs from "node:fs"
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
-
-export const DEBUG_LATEST_FILE = ".opencode/subconscious/debug/latest-run.json"
-export const DEBUG_LATEST_INJECTION_FILE = ".opencode/subconscious/debug/latest-injection.md"
 
 export type DebugRunStatus = "running" | "done" | "skipped" | "ignored" | "error"
 
@@ -153,14 +149,18 @@ export function finishDebugWorker(run: DebugRun, workerID: string, output: strin
   })
 }
 
-export async function writeWorkerOutputDebug(root: string, run: DebugRun, workerID: string, output: string) {
+export async function writeWorkerOutputDebug(
+  runsDir: string,
+  run: DebugRun,
+  workerID: string,
+  output: string,
+) {
   const worker = run.workers.find((item) => item.id === workerID)
   if (!worker) return
-  const dir = path.join(root, ".opencode", "subconscious", "debug")
-  await mkdir(path.join(dir, "runs"), { recursive: true })
-  const runFile = path.join("runs", `${run.id}-${worker.id.toLowerCase()}-output.md`)
-  await Bun.write(path.join(dir, runFile), output.endsWith("\n") ? output : `${output}\n`)
-  worker.outputPath = path.join(".opencode", "subconscious", "debug", runFile)
+  await mkdir(runsDir, { recursive: true })
+  const runFile = `${run.id}-${worker.id.toLowerCase()}-output.md`
+  await Bun.write(path.join(runsDir, runFile), output.endsWith("\n") ? output : `${output}\n`)
+  worker.outputPath = path.join(runsDir, runFile)
   run.updatedAt = Date.now()
 }
 
@@ -174,33 +174,20 @@ export function failDebugWorker(run: DebugRun, workerID: string, error: unknown)
   addDebugEvent(run, "worker.error", `${worker.key} failed`, { error: worker.error })
 }
 
-export async function writeDebugRun(root: string, run: DebugRun) {
-  const dir = path.join(root, ".opencode", "subconscious", "debug")
-  await mkdir(path.join(dir, "runs"), { recursive: true })
+export async function writeDebugRun(runsDir: string, run: DebugRun) {
+  await mkdir(runsDir, { recursive: true })
   run.updatedAt = Date.now()
   const text = `${JSON.stringify(run, null, 2)}\n`
-  await Bun.write(path.join(dir, "latest-run.json"), text)
-  await Bun.write(path.join(dir, "runs", `${run.id}.json`), text)
+  await Bun.write(path.join(runsDir, "latest.json"), text)
+  await Bun.write(path.join(runsDir, `${run.id}.json`), text)
 }
 
-export async function writeInjectionDebug(root: string, run: DebugRun, text: string) {
-  const dir = path.join(root, ".opencode", "subconscious", "debug")
-  await mkdir(path.join(dir, "runs"), { recursive: true })
+export async function writeInjectionDebug(runsDir: string, run: DebugRun, text: string) {
+  await mkdir(runsDir, { recursive: true })
   const content = text.endsWith("\n") ? text : `${text}\n`
-  const runFile = path.join("runs", `${run.id}-injection.md`)
-  await Bun.write(path.join(dir, runFile), content)
-  await Bun.write(path.join(root, DEBUG_LATEST_INJECTION_FILE), content)
-  return path.join(".opencode", "subconscious", "debug", runFile)
-}
-
-export function readLatestDebugRun(root: string) {
-  const file = path.join(root, DEBUG_LATEST_FILE)
-  if (!fs.existsSync(file)) return
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf8")) as DebugRun
-  } catch {
-    return
-  }
+  const runFile = `${run.id}-injection.md`
+  await Bun.write(path.join(runsDir, runFile), content)
+  return path.join(runsDir, runFile)
 }
 
 export function preview(output: string) {

@@ -10,7 +10,7 @@ If you are building on top of the CLI, read this before you start. Most of the d
 
 **The CLI is a thinking engine. It is not an answering engine.**
 
-It takes a conversation as input and returns a "Subconscious Heads-Up" — a structured piece of internal context. The CLI's job ends there. Turning that heads-up into a user-facing message is the consumer's responsibility.
+It takes a conversation as input and returns a "Heads-Up" — a structured piece of internal context. The CLI's job ends there. Turning that heads-up into a user-facing message is the consumer's responsibility.
 
 ---
 

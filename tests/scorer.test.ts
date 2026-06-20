@@ -16,7 +16,7 @@
  *     25-39, 40-59, 60-74, 75-84, 85-95, 96-100)
  *   - The judge prompt includes the "no 80+ if must-avoid violated"
  *     strictness rule
- *   - The judge prompt frames the input as a "Subconscious Heads-Up"
+ *   - The judge prompt frames the input as a "Heads-Up"
  *     (private context for a downstream LLM), not a user-facing
  *     response
  */
@@ -121,7 +121,7 @@ describe("judgeThinking (with scripted provider)", () => {
     )
     const result = await judgeThinking(provider, {
       caseID: "TEST-001",
-      thinking: "[Subconscious Heads-Up]\nsome content",
+      thinking: "[Heads-Up]\nsome content",
       expectedQuality: "x",
       mustAvoid: [],
       userMessage: "x",

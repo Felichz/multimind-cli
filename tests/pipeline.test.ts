@@ -86,14 +86,14 @@ describe("pipeline", () => {
     expect(Object.keys(result.workers)).toEqual(["W2"])
     expect(result.workers.W2?.key).toBe("W2")
     expect(result.workers.W2?.output).toContain("missing consistency check")
-    expect(result.headsUp).toContain("Subconscious Heads-Up")
+    expect(result.headsUp).toContain("[Heads-Up]")
   })
 
   test("runs C0 synthesizer when C0 prompt is available and W0 activates", async () => {
     const provider = scriptedProvider([
       "STATUS: ACTIVATE\nWORKERS: W14\nCONTEXT: delivery contract",
       "DELIVERY_CONTRACT: must verify before done.",
-      "[Subconscious Completion Contract]\nCOMPLETION_CONTRACT:\n  evidence:\n    - verified\n[multimind:safe_to_end]",
+      "[Multimind Completion Contract]\nCOMPLETION_CONTRACT:\n  evidence:\n    - verified\n[multimind:safe_to_end]",
     ])
     const result = await runThinkingPipeline(makeInput("build it", "done"), provider, {
       promptsDir: PROMPTS_DIR,

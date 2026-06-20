@@ -17,7 +17,7 @@ export function consolidateForMainAgent(insights: ConsolidatorInsight[]) {
   const contracts = situationalResponseContracts(insights)
 
   return [
-    "[Subconscious Heads-Up]",
+    "[Heads-Up]",
     "",
     "Background cognitive workers reviewed the latest exchange. Do not treat this as a checklist or a script. Treat it as a consciousness frame for the next answer.",
     "",
@@ -76,7 +76,7 @@ export function consolidateWithDistilledWorkerKernels(input: {
   )
 
   return [
-    "[Subconscious Heads-Up]",
+    "[Heads-Up]",
     "",
     "Background cognitive workers reviewed the latest exchange. W0 already selected the relevant perspectives; the notes below include only distilled kernels for those selected workers.",
     "",
@@ -132,10 +132,10 @@ export function consolidateSynthesizerForMainAgent(input: {
   const deliverable = requiredVisibleDeliverable(input.insights)
   const artifact = firstVisibleArtifactSection(input.insights)
   const contracts = situationalResponseContracts(input.insights)
-  const c0Decision = parseSubconsciousDecision(input.synthesis)
+  const c0Decision = parseMultimindDecision(input.synthesis)
 
   return [
-    "[Subconscious Heads-Up]",
+    "[Heads-Up]",
     "",
     "C0 synthesized a completion contract. Treat it as the prioritized consciousness frame for the next answer, but do not let synthesis erase concrete worker evidence.",
     "",
@@ -184,12 +184,11 @@ export function consolidateSynthesizerForMainAgent(input: {
   ].join("\n")
 }
 
-function parseSubconsciousDecision(text: string) {
+function parseMultimindDecision(text: string) {
   const finalLine = text.trimEnd().split("\n").at(-1)?.trim().toLowerCase()
-  if (finalLine === "[subconscious:safe_to_end]" || finalLine === "subconscious:safe_to_end")
-    return "safe_to_end"
-  if (finalLine === "[subconscious:continue]" || finalLine === "subconscious:continue") return "continue"
-  if (finalLine === "[subconscious:blocked]" || finalLine === "subconscious:blocked") return "blocked"
+  if (finalLine === "[multimind:safe_to_end]" || finalLine === "multimind:safe_to_end") return "safe_to_end"
+  if (finalLine === "[multimind:continue]" || finalLine === "multimind:continue") return "continue"
+  if (finalLine === "[multimind:blocked]" || finalLine === "multimind:blocked") return "blocked"
   return "missing"
 }
 
@@ -261,10 +260,10 @@ function firstVisibleArtifactSection(insights: ConsolidatorInsight[]) {
           "- Use `UNVERIFIED` repo paths only for agent-facing traces or status files. For a user handoff, prefer visible names like `plugin status screenshot`, `PR comment thread`, or `copied status block`.",
           "- For review/comment-agent failures, make the first evidence menu this small and explicit, in this order: `PR link to the comment` if available; `exact copied comment plus file/line and 5-10 surrounding diff lines`; or `screenshot of the comment thread with nearby diff`. Do not lead with raw logs or screenshots alone when a PR link or copied comment is simpler.",
           "- If the user is non-technical or overloaded, lead with a visible screenshot/status/comment artifact in plain language, and move repo paths or raw traces to fallback evidence for the agent.",
-          "- If this is the Subconscious plugin itself, prefer existing surfaces before inventing a new one: TUI status label, `/subconscious-debug`, `.opencode/subconscious/debug/latest-run.json`, and the debug dashboard.",
+          "- If this is the multimind plugin itself, prefer existing surfaces before inventing a new one: TUI status label, `/subconscious-debug`, `.opencode/subconscious/debug/latest-run.json`, and the debug dashboard.",
           "- For OpenCode/plugin debug, do not say only `live log`, `trace`, or `OpenCode logs`. Name at least two exact surfaces from the known set, plus the screenshot/snippet fields to capture from each.",
-          "- Treat those Subconscious plugin surfaces as known standard surfaces. If you have not inspected the current run, mark the current contents as unverified or possibly stale; do not mark the standard path itself as UNVERIFIED.",
-          "- For the Subconscious plugin itself, use concrete marker fields when available: `plugin_loaded`, `idle_detected`, `hook_dispatched`, `callback_entered`, `worker_action_completed`, and `error`.",
+          "- Treat those multimind plugin surfaces as known standard surfaces. If you have not inspected the current run, mark the current contents as unverified or possibly stale; do not mark the standard path itself as UNVERIFIED.",
+          "- For the multimind plugin itself, use concrete marker fields when available: `plugin_loaded`, `idle_detected`, `hook_dispatched`, `callback_entered`, `worker_action_completed`, and `error`.",
           "- Choose exactly one highest-signal live surface to watch first, then name fallback or alternative surfaces after it. Do not bury the primary observation in a broad list.",
           "- Include exact surfaces: UI pane, status file, trace path, log prefix, screenshot target, ordered markers or states, and exact snippet/screenshot fields to capture.",
           "- Accept equivalent evidence when the preferred artifact is absent: screenshot, status label, JSON excerpt, command output, or one log line is enough if it proves the same boundary.",
@@ -319,8 +318,8 @@ function firstVisibleArtifactSection(insights: ConsolidatorInsight[]) {
       ? [
           "First visible artifact to include:",
           "- Start with a named artifact block: `First artifact: <repo-relative slot or UNVERIFIED slot> — <one-line purpose>`.",
-          "- Slot selection must be project-relative. Prefer project-supplied eval, test, or run-record slots before placeholders; do not treat Subconscious plugin development paths as universal defaults for unrelated projects.",
-          "- When working in this Subconscious plugin development repo, prefer known slots before placeholders: `packages/opencode/scripts/benchmark-reaction-dataset.jsonl` for final response or architecture behavior, `packages/opencode/scripts/benchmark-thought-dataset.jsonl` for worker cognition, `packages/opencode/scripts/benchmark-autoqa-dataset.jsonl` for auto-QA behavior, `.opencode/subconscious/self-improvement/candidates/<id>/synthetic-test.json` for generated fail-first candidate cases, `.opencode/subconscious/evals/reaction-runs/latest.json` for reaction run records, and `.opencode/subconscious/evals/runs/latest.json` for worker eval run records.",
+          "- Slot selection must be project-relative. Prefer project-supplied eval, test, or run-record slots before placeholders; do not treat multimind plugin development paths as universal defaults for unrelated projects.",
+          "- When working in this multimind plugin development repo, prefer known slots before placeholders: `packages/opencode/scripts/benchmark-reaction-dataset.jsonl` for final response or architecture behavior, `packages/opencode/scripts/benchmark-thought-dataset.jsonl` for worker cognition, `packages/opencode/scripts/benchmark-autoqa-dataset.jsonl` for auto-QA behavior, `.opencode/subconscious/self-improvement/candidates/<id>/synthetic-test.json` for generated fail-first candidate cases, `.opencode/subconscious/evals/reaction-runs/latest.json` for reaction run records, and `.opencode/subconscious/evals/runs/latest.json` for worker eval run records.",
           "- Do not invent generic primary slots like `evals/regressions/*.yaml` when a known repo registry fits the claim. Use the known registry first and mark only the case entry/current contents as unverified.",
           "- Choose the slot by claim type: reaction/final-response slot for visible assistant response or plugin architecture behavior, auto-QA/app/integration/e2e slot for delivery or user workflow behavior, and worker-cognition slot only when the claim is specifically about worker cognition.",
           "- Treat project-supplied dataset and run-record paths as known repo slots. If tools are unavailable, do not call the known slot itself UNVERIFIED; say the case entry, current contents, baseline result, or run record is unverified until inspected.",

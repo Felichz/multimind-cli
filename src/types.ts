@@ -69,7 +69,7 @@ export type ThinkingInput = {
 
   /** Per-run config overrides. Merged with the config file /
    *  env defaults. */
-  config?: Partial<SubconsciousConfig>
+  config?: Partial<MultimindConfig>
 
   /** Optional session id. Echoed in `meta.sessionID` and in
    *  the run record, for log correlation across multiple
@@ -160,9 +160,8 @@ export type ThinkingMeta = {
  *   const record = await Bun.file(result.meta.runRecordPath!).json()
  */
 export type ThinkingOutput = {
-  /** The consolidated "Subconscious Heads-Up" — markdown, ready
-   *  to be injected as LLM context. Empty if the router
-   *  skipped. */
+  /** The consolidated "Heads-Up" — markdown, ready to be
+   *  injected as LLM context. Empty if the router skipped. */
   headsUp: string
 
   /** Per-worker outputs, keyed by worker key (e.g. "W14",
@@ -178,7 +177,7 @@ export type ThinkingOutput = {
  * to touch this; the defaults in `DEFAULT_CONFIG` are tuned for
  * the typical use case.
  */
-export type SubconsciousConfig = {
+export type MultimindConfig = {
   /** Master switch. `false` returns an empty output with the
    *  note `"disabled"`. */
   enabled?: boolean
@@ -217,7 +216,7 @@ export type SubconsciousConfig = {
  * The default config. Used when no per-run config is supplied
  * and no config file / env var overrides the field.
  */
-export const DEFAULT_CONFIG: SubconsciousConfig = {
+export const DEFAULT_CONFIG: MultimindConfig = {
   enabled: true,
   model: "opencode-go/minimax-m3",
   delivery: "silent",

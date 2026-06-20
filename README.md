@@ -7,7 +7,7 @@
 
 > A background thinking pipeline that runs as a command. Provider-agnostic, stateless, designed to be driven by any LLM-powered tool.
 
-You give it a conversation, it gives you back a "Subconscious Heads-Up" — a structured, private piece of context for your host LLM. The CLI is for thinking. Your code is for answering.
+You give it a conversation, it gives you back a "Heads-Up" — a structured, private piece of context for your host LLM. The CLI is for thinking. Your code is for answering.
 
 What it does, in one paragraph: a small set of background lenses (W0 through W17) review the latest exchange and produce a completion contract — a written agreement about what was actually verified, what was merely claimed, and what's left to do. The output is split into `headsUp` (the consolidated thinking), `workers` (per-lens raw output, keyed by worker), and `meta` (pipeline metadata). You pick which parts to use; the CLI does not decide for you.
 
@@ -266,7 +266,7 @@ type ThinkingInput = {
   history: Message[]                        // recent conversation (last 10 used)
   workers?: string[]                        // optional: override the router's choice
   model?: string                            // optional: "provider/model" form
-  config?: Partial<SubconsciousConfig>      // optional: per-run config overrides
+  config?: Partial<MultimindConfig>         // optional: per-run config overrides
   sessionID?: string                        // optional: for log correlation
 }
 

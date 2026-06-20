@@ -32,9 +32,9 @@ function insight(key: string, name: string, output: string): ConsolidatorInsight
 }
 
 describe("consolidateForMainAgent", () => {
-  test("starts with the [Subconscious Heads-Up] marker", () => {
+  test("starts with the [Heads-Up] marker", () => {
     const out = consolidateForMainAgent([insight("W2", "Gap Detector", "found a gap")])
-    expect(out.startsWith("[Subconscious Heads-Up]")).toBe(true)
+    expect(out.startsWith("[Heads-Up]")).toBe(true)
   })
 
   test("includes each worker's name and a summary line", () => {
@@ -75,12 +75,12 @@ describe("consolidateWithDistilledWorkerKernels", () => {
     { key: "W4", title: "Risk scanner principle", body: "Name what could fail." },
   ]
 
-  test("starts with the [Subconscious Heads-Up] marker", () => {
+  test("starts with the [Heads-Up] marker", () => {
     const out = consolidateWithDistilledWorkerKernels({
       insights: [insight("W2", "Gap", "x")],
       kernels,
     })
-    expect(out.startsWith("[Subconscious Heads-Up]")).toBe(true)
+    expect(out.startsWith("[Heads-Up]")).toBe(true)
   })
 
   test("references the kernel titles for each fired worker", () => {
@@ -96,10 +96,10 @@ describe("consolidateWithDistilledWorkerKernels", () => {
 describe("consolidateSynthesizerForMainAgent", () => {
   test("uses the C0 synthesis when present", () => {
     const out = consolidateSynthesizerForMainAgent({
-      synthesis: "[Subconscious Completion Contract]\nDONE",
+      synthesis: "[Multimind Completion Contract]\nDONE",
       insights: [insight("W14", "Delivery", "x")],
     })
-    expect(out).toContain("Subconscious Completion Contract")
+    expect(out).toContain("Multimind Completion Contract")
     expect(out).toContain("DONE")
   })
 
@@ -108,7 +108,7 @@ describe("consolidateSynthesizerForMainAgent", () => {
       synthesis: "",
       insights: [insight("W2", "Gap", "the only finding")],
     })
-    expect(out).toContain("[Subconscious Heads-Up]")
+    expect(out).toContain("[Heads-Up]")
     expect(out).toContain("the only finding")
   })
 

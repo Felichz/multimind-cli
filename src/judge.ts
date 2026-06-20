@@ -1,7 +1,7 @@
 /**
  * LLM-as-judge scorer for the thinking pipeline.
  *
- * The input is a "Subconscious Heads-Up" — the structured thinking the
+ * The input is a "Heads-Up" — the structured thinking the
  * CLI returns from `runThinkingPipeline`. It is private context for a
  * downstream LLM (the consumer), not a user-facing response. The judge
  * scores whether the thinking:
@@ -45,7 +45,7 @@ export type JudgeResult = {
 
 const JUDGE_PROMPT = (
   input: JudgeInput,
-): string => `You are a strict black-box judge for a "Subconscious Heads-Up" produced by a background thinking pipeline.
+): string => `You are a strict black-box judge for a "Heads-Up" produced by the multimind thinking pipeline.
 
 The heads-up is private, structured context that a downstream LLM (the consumer) will read to produce a user-facing response. It is not a response to the user. Judge it on whether it equips a senior engineer to act, not on whether it is polite, brief, or user-facing.
 
@@ -105,7 +105,7 @@ ${input.expectedQuality}
 Must avoid:
 ${input.mustAvoid.map((entry) => `- ${entry}`).join("\n")}
 
-Subconscious heads-up:
+Heads-up:
 ${input.thinking || "(empty heads-up — pipeline returned no thinking)"}
 
 JSON:
