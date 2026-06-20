@@ -16,11 +16,11 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
+import { judgeThinking } from "../src/judge"
 import { OpenAICompatProvider } from "../src/llm/openai-compat"
 import type { LLMProvider } from "../src/llm/provider"
 import { runThinkingPipeline } from "../src/pipeline/run"
 import type { ThinkingInput } from "../src/types"
-import { judgeThinking } from "./scorer"
 
 const ROOT = path.join(import.meta.dir, "..")
 const DATASET = path.join(ROOT, "evals", "dataset.jsonl")

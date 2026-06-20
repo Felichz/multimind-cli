@@ -22,7 +22,7 @@
  */
 
 import { describe, expect, test } from "bun:test"
-import { judgeThinking, parseJudgeResponse } from "../evals/scorer"
+import { judgeThinking, parseJudgeResponse } from "../src/judge"
 import type { LLMProvider, LLMRequest, LLMResponse } from "../src/llm/provider"
 
 function scriptedProvider(content: string): LLMProvider {
