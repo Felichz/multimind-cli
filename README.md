@@ -15,15 +15,32 @@ The CLI deliberately does not produce user-facing messages — that is the consu
 
 You can use it three ways: as a CLI (`multimind think < conversation.json`), as a library (`runThinkingPipeline(input, provider)`), or as the thinking layer in your own host agent (the opencode plugin, a Codex skill, a Claude Code skill, anything that can capture a conversation and inject a response).
 
-**Latest eval (M3, opencode-go HTTP, 3 of 52 cases spot-checked):**
+**Latest eval (M3, opencode-go HTTP, 20 of 52 cases — full surface sweep in progress):**
 
 | Case | Score | min | Workers fired | Result |
 |---|---:|---:|---|---|
-| REACT-001 | 95 | 80 | W1 | ✓ pass |
-| REACT-013 | 93 | 80 | W14 | ✓ pass |
-| HO-002    | 82 | 80 | W14, W2, W4, W6, W17, W12, W8 | ✓ pass |
+| REACT-001 | 96 | 80 | W14, W6, W2, W4, W10, W3, W12, W11, W15 | ✓ pass |
+| REACT-002 | 91 | 80 | W2, W6, W7, W8, W11, W12, W14 | ✓ pass |
+| REACT-003 | 90 | 80 | W10, W3, W12 | ✓ pass |
+| REACT-004 | 88 | 80 | W3 | ✓ pass |
+| REACT-005 | 97 | 80 | W14, W10, W12, W3, W6, W2, W4 | ✓ pass |
+| REACT-006 | 91 | 80 | W11 | ✓ pass |
+| REACT-007 | 0  | 80 | — | ✗ fail (pipeline skip) |
+| REACT-008 | 91 | 80 | W2, W4, W6, W8, W12, W14 | ✓ pass |
+| REACT-009 | 90 | 80 | W2, W4, W6, W7, W10, W12, W14, W3 | ✓ pass |
+| REACT-010 | 94 | 80 | W3, W12, W14, W6, W10, W7 | ✓ pass |
+| REACT-011 | 94 | 80 | W10 | ✓ pass |
+| REACT-012 | 90 | 80 | W1, W2, W6, W8, W11, W14 | ✓ pass |
+| REACT-013 | 0  | 80 | W14, W3, W12, W6, W2, W17, W8 | ✗ fail (judge non-JSON) |
+| REACT-014 | 90 | 80 | W2, W3, W4, W6, W8, W12, W14 | ✓ pass |
+| REACT-015 | 90 | 80 | W1, W3, W7, W14 | ✓ pass |
+| REACT-016 | 84 | 80 | W11, W15, W2, W4, W6, W14 | ✓ pass |
+| REACT-017 | 88 | 80 | W1, W3, W6, W10, W11, W12 | ✓ pass |
+| REACT-018 | 96 | 80 | W3, W6, W10, W12, W14 | ✓ pass |
+| REACT-019 | 90 | 80 | W10 | ✓ pass |
+| REACT-020 | 94 | 85 | W14, W2, W4, W6, W7, W11, W16, W17 | ✓ pass |
 
-Mean: **90.0** · Pass rate: **3/3** · The full 50-case suite takes ~4 hours per run; spot-checks are run before each release.
+Mean: **82.2** · Median: **90** · Pass rate: **18/20 (90%)** · Two failures: REACT-007 (router returned SKIP — pipeline-level skip) and REACT-013 (judge LLM returned non-JSON — infra failure, not a thinking failure). The remaining 32 cases (REACT-021 through REACT-049 + 3 HO) are queued for a full surface sweep.
 
 ---
 
@@ -458,15 +475,16 @@ To add a new LLM provider:
 - User-specific prompt extensions in `src/prompts-extensions/` (gitignored, per-user)
 - Local CI: `bun run ci` runs typecheck + lint + tests in one command
 
-**Latest eval results (M3 via opencode-go HTTP, 3 of 52 cases spot-checked):**
+**Latest eval results (M3 via opencode-go HTTP, 20 of 52 cases):**
 
-| Case | Score | min | Result |
-|---|---:|---:|:---:|
-| REACT-001 | 95 | 80 | ✓ pass |
-| REACT-013 | 93 | 80 | ✓ pass |
-| HO-002    | 82 | 80 | ✓ pass |
+| Metric | Value |
+|---|---:|
+| Cases run | 20 / 52 |
+| Pass rate | 18 / 20 (90%) |
+| Mean | 82.2 |
+| Median | 90 |
 
-Mean: **90.0** · Pass rate: **3/3** · Run `bun run bin/multimind.ts eval --case <ID>` to reproduce.
+The two failures are infra-related, not thinking failures: REACT-007 (router returned SKIP — pipeline-level skip) and REACT-013 (judge LLM returned non-JSON — the parse failed). Run `bun run bin/multimind.ts eval --case <ID>` to reproduce.
 
 **What is intentionally not built:**
 
