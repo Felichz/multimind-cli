@@ -9,39 +9,9 @@
  * old "smoke check the constructor" test did not.
  */
 
-import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterEach, beforeEach, describe, expect, test } from "bun:test"
 import { OpenAICompatProvider } from "../src/llm/openai-compat"
-
-type FetchCall = { url: string; init: RequestInit }
-
-function mockFetch(impl: (url: string, init: RequestInit) => Promise<Response>): {
-  calls: FetchCall[]
-  restore: () => void
-} {
-  const calls: FetchCall[] = []
-  const original = globalThis.fetch
-  globalThis.fetch = mock(async (input: string | URL, init?: RequestInit) => {
-    const url = typeof input === "string" ? input : input.toString()
-    calls.push({ url, init: init ?? {} })
-    return impl(url, init ?? {})
-  }) as unknown as typeof fetch
-  return {
-    calls,
-    restore: () => {
-      globalThis.fetch = original
-    },
-  }
-}
-
-function chatCompletionResponse(content: string): Response {
-  return new Response(
-    JSON.stringify({
-      choices: [{ message: { role: "assistant", content }, finish_reason: "stop" }],
-      usage: { prompt_tokens: 11, completion_tokens: 22, total_tokens: 33 },
-    }),
-    { status: 200, headers: { "Content-Type": "application/json" } },
-  )
-}
+import { chatCompletionResponse, mockFetch } from "./helpers"
 
 describe("OpenAICompatProvider", () => {
   let savedEnv: Record<string, string | undefined>
