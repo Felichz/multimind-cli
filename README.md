@@ -92,7 +92,7 @@ The implementation is allowed to grow in complexity only where it expresses one 
                                    { thinking, workers, c0Decision, ... }
 ```
 
-**Three responsibilities, three layers:**
+**Two layers, one contract between them:**
 
 | Layer | Responsibility | Where it lives |
 |---|---|---|
