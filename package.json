@@ -16,8 +16,7 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
-    "evals": "bun run evals/runner.ts",
-    "cli": "bun run src/cli.ts"
+    "evals": "bun run evals/runner.ts"
   },
   "devDependencies": {
     "@types/bun": "latest",

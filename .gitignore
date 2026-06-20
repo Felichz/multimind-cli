@@ -41,5 +41,4 @@ src/prompts-extensions/*
 # Not for the repo. If you want to keep a specific synthetic test, copy
 # it into a regular test file.
 src/prompts/AUTO-GEN-*.json
-!src/prompts/AUTO-GEN-W3-TEST.json
 tests/fail_first_synthetic_eval*.json

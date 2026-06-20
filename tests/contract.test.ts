@@ -107,10 +107,29 @@ describe("prompts", () => {
       "W12_AUTO_TESTER",
       "W13_RESEARCHER",
       "W14_DELIVERY_CONTRACT",
+      "W15_ARCHITECTURE_RISK",
+      "W16_ROLLOUT_PLAN",
+      "W17_SECURITY_CHECK",
     ]
     for (const key of expectedKeys) {
       const file = fs.readdirSync(PROMPTS_DIR).find((f) => f.startsWith(`${key}`) || f.startsWith(`${key}.md`))
       expect(file, `expected prompt for ${key}`).toBeDefined()
+    }
+  })
+
+  test("no duplicate worker files (each W{n} has exactly one prompt)", () => {
+    const mdFiles = fs.readdirSync(PROMPTS_DIR).filter((f) => f.endsWith(".md"))
+    const byKey = new Map<string, string[]>()
+    for (const f of mdFiles) {
+      const match = f.match(/^(W\d+)_/)
+      if (match) {
+        const arr = byKey.get(match[1]) ?? []
+        arr.push(f)
+        byKey.set(match[1], arr)
+      }
+    }
+    for (const [key, files] of byKey) {
+      expect(files, `duplicate prompt files for ${key}: ${files.join(", ")}`).toHaveLength(1)
     }
   })
 
