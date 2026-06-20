@@ -46,7 +46,7 @@ Input: JSON object on stdin or --input, with shape:
     "config"?: { ... }
   }
 
-Output: JSON object with { thinking, workers, routerDecision, c0Decision?, notes, totalDurationMs }
+Output: JSON object with { headsUp, workers, meta } — see README "The output shape" for the full schema and three example consumer patterns.
 
 Config subcommands:
   multimind config          # show current resolved config (env + file)

@@ -347,10 +347,33 @@ async function discoverWorkers(coreDir: string, extDir: string): Promise<Record<
     Array.fromAsync(new Bun.Glob("W*.md").scan({ cwd: coreDir })).catch(() => [] as string[]),
     Array.fromAsync(new Bun.Glob("W*.md").scan({ cwd: extDir })).catch(() => [] as string[]),
   ])
-  const files = Array.from(new Set(coreFiles.flat())).filter((f) => f.match(/^W\d+_/) && !f.match(/^W0_/))
+  // Both directories can contribute files; merge them. If the same worker
+  // key appears in both, the prompts-extensions file wins (it is the
+  // user's override) and we log nothing — that is the intended mechanism.
+  // Within a single directory, duplicates are a bug, not an override.
+  const seenInDir = new Map<string, string>() // "dir:key" -> filename
+  for (const dir of [coreDir, extDir]) {
+    const files = coreFiles[dir === coreDir ? 0 : 1] ?? []
+    for (const file of files) {
+      if (!file.match(/^W\d+_/) || file.match(/^W0_/)) continue
+      const match = file.match(/^(W\d+)_/)
+      if (!match) continue
+      const key = `${dir}:${match[1]}`
+      if (seenInDir.has(key)) {
+        throw new Error(
+          `Duplicate worker file for ${match[1]} in ${dir}: ` +
+          `"${seenInDir.get(key)}" and "${file}". ` +
+          `Remove one, or merge their content.`,
+        )
+      }
+      seenInDir.set(key, file)
+    }
+  }
+  // Now build the canonical map. If both dirs have the same key, extDir
+  // wins (we process it last and overwrite).
   const out: Record<string, string> = {}
-  for (const file of files) {
-    const match = file.match(/^(W\d+)_/)
+  for (const [key, file] of seenInDir) {
+    const match = key.match(/:(W\d+)$/)
     if (match) out[match[1]] = file
   }
   return out
