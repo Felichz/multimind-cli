@@ -52,8 +52,8 @@ describe("pipeline", () => {
       promptsDir: PROMPTS_DIR,
       runsDir: RUNS_DIR,
     })
-    expect(result.routerDecision).toBe("SKIP")
-    expect(result.notes).toContain("disabled")
+    expect(result.meta.routerDecision).toBe("SKIP")
+    expect(result.meta.notes).toContain("disabled")
   })
 
   test("skips when W0 says SKIP", async () => {
@@ -62,8 +62,8 @@ describe("pipeline", () => {
       promptsDir: PROMPTS_DIR,
       runsDir: RUNS_DIR,
     })
-    expect(result.routerDecision).toBe("SKIP")
-    expect(result.notes).toContain("skipped")
+    expect(result.meta.routerDecision).toBe("SKIP")
+    expect(result.meta.notes).toContain("skipped")
   })
 
   test("fires workers and consolidates when W0 says ACTIVATE", async () => {
@@ -75,11 +75,11 @@ describe("pipeline", () => {
       promptsDir: PROMPTS_DIR,
       runsDir: RUNS_DIR,
     })
-    expect(result.routerDecision).toBe("ACTIVATE")
-    expect(result.workers).toHaveLength(1)
-    expect(result.workers[0]?.key).toBe("W2")
-    expect(result.workers[0]?.output).toContain("missing consistency check")
-    expect(result.thinking).toContain("Subconscious Heads-Up")
+    expect(result.meta.routerDecision).toBe("ACTIVATE")
+    expect(Object.keys(result.workers)).toEqual(["W2"])
+    expect(result.workers.W2?.key).toBe("W2")
+    expect(result.workers.W2?.output).toContain("missing consistency check")
+    expect(result.headsUp).toContain("Subconscious Heads-Up")
   })
 
   test("runs C0 synthesizer when C0 prompt is available and W0 activates", async () => {
@@ -92,8 +92,8 @@ describe("pipeline", () => {
       promptsDir: PROMPTS_DIR,
       runsDir: RUNS_DIR,
     })
-    expect(result.routerDecision).toBe("ACTIVATE")
-    expect(result.c0Decision).toBe("safe_to_end")
+    expect(result.meta.routerDecision).toBe("ACTIVATE")
+    expect(result.meta.c0Decision).toBe("safe_to_end")
   })
 
   test("rejects when latest user message is a self-injection (avoids recursion)", async () => {
@@ -112,7 +112,7 @@ describe("pipeline", () => {
       provider,
       { promptsDir: PROMPTS_DIR, runsDir: RUNS_DIR },
     )
-    expect(result.notes).toContain("injection_recent")
+    expect(result.meta.notes).toContain("injection_recent")
   })
 
   test("skips when assistant hasn't answered the latest real user message", async () => {
@@ -128,7 +128,7 @@ describe("pipeline", () => {
       provider,
       { promptsDir: PROMPTS_DIR, runsDir: RUNS_DIR },
     )
-    expect(result.notes).toContain("assistant_pending")
+    expect(result.meta.notes).toContain("assistant_pending")
   })
 
   test("honors workers override from input when router activates", async () => {
@@ -142,8 +142,7 @@ describe("pipeline", () => {
       provider,
       { promptsDir: PROMPTS_DIR, runsDir: RUNS_DIR },
     )
-    expect(result.routerDecision).toBe("ACTIVATE")
-    const keys = result.workers.map((w) => w.key).sort()
-    expect(keys).toEqual(["W2", "W4"])
+    expect(result.meta.routerDecision).toBe("ACTIVATE")
+    expect(Object.keys(result.workers).sort()).toEqual(["W2", "W4"])
   })
 })

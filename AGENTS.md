@@ -18,10 +18,10 @@ It takes a conversation as input and returns a "Subconscious Heads-Up" — a str
 
 ```
 Input:   { history: Message[], workers?, model?, config? }
-Output:  { thinking: string, workers, routerDecision, c0Decision?, notes, totalDurationMs }
+Output:  { headsUp, workers, meta }
 ```
 
-That is the whole public contract. The `thinking` field is the heads-up. It is a markdown string. It is not addressed to the user.
+That is the whole public contract. The output is split on purpose: the consolidated thinking is in `headsUp`, the per-worker outputs are in `workers` (keyed by worker key), and pipeline-level metadata is in `meta`. The split mirrors the boundary — the consumer picks which part to use, the CLI does not decide for them.
 
 ---
 
@@ -78,13 +78,53 @@ This is why `synthesizeFinalResponse` was removed, and why `multimind answer` wa
 
 The CLI does not care who or what the consumer is. Some examples:
 
-**OpenCode plugin.** The plugin captures the conversation, calls `multimind think`, injects the heads-up as a synthetic message in the opencode session with `metadata.source === "multimind"`, and lets the opencode agent's next LLM turn produce the user-facing response. The CLI sees this as a regular stdin call. It does not know about opencode.
+**OpenCode plugin.** The plugin captures the conversation, calls `multimind think`, injects `result.headsUp` as a synthetic message in the opencode session with `metadata.source === "multimind"`, and lets the opencode agent's next LLM turn produce the user-facing response. The CLI sees this as a regular stdin call. It does not know about opencode.
 
-**A Codex skill or Claude Code skill.** Same pattern: capture context, call `multimind think`, hand the heads-up to the host LLM.
+**A Codex skill or Claude Code skill.** Same pattern: capture context, call `multimind think`, hand `result.headsUp` to the host LLM.
 
-**A non-LLM consumer.** A script, a CI step, a tool that wants to score a conversation. The CLI still returns the heads-up. The script can `JSON.parse(result.thinking)`, scan for `[multimind:blocked]` markers, write the heads-up to a file, etc. The script does not need a downstream LLM to use the CLI.
+**A non-LLM consumer.** A script, a CI step, a tool that wants to score a conversation. The CLI still returns the heads-up. The script can read `result.headsUp`, scan `result.meta.c0Decision` for `[multimind:blocked]` markers, write the heads-up to a file, etc. The script does not need a downstream LLM to use the CLI.
 
-**A smoke test.** `multimind eval` is the consumer of itself. The eval runner calls the pipeline, then asks a judge LLM to score the heads-up. The judge is not the user. The judge is the CLI's quality signal.
+**A smoke test.** `multimind eval` is the consumer of itself. The eval runner calls the pipeline, then asks a judge LLM to score `result.headsUp`. The judge is not the user. The judge is the CLI's quality signal.
+
+**A user-facing debug surface.** A consumer that wants to show the user "we identified these risks" reads `result.workers.W4` (risk scanner), `result.workers.W17` (security check), `result.workers.W2` (gap detector). The CLI does not flatten this into a UI; the consumer builds the UI it needs from the parts the CLI returns.
+
+---
+
+## The output shape, in detail
+
+The output is split on purpose. Each top-level field answers a different question:
+
+| Field | Question it answers | When to use it |
+|---|---|---|
+| `headsUp` | "What is the consolidated thinking the host LLM should see as context?" | Always — this is the main artifact. |
+| `workers[key]` | "What did a specific lens say?" | Targeted inspection. `workers.W17` is the security findings. `workers.W4` is the risk scanner. The consumer picks. |
+| `meta.routerDecision` | "Did the pipeline activate at all?" | Logging, telemetry, deciding whether to use `headsUp` at all (it is empty if the router said SKIP). |
+| `meta.c0Decision` | "What did the workers' private synthesis conclude?" | `safe_to_end` / `continue` / `blocked` / `missing`. The consumer's host LLM can use this as an internal signal. |
+| `meta.runRecordPath` | "Where is the full trace?" | Post-hoc debugging. Contains every prompt and every raw response, including the ones not shown in `headsUp`. |
+| `meta.totalDurationMs` | "How long did this take?" | Telemetry, latency budgets. |
+
+A consumer that just wants the heads-up to feed its host LLM:
+
+```ts
+const result = await runThinkingPipeline(input, provider)
+const ctx = result.headsUp
+```
+
+A consumer that wants to surface specific worker findings:
+
+```ts
+const security = result.workers.W17?.output
+const risks = result.workers.W4?.output
+```
+
+A consumer that wants full telemetry:
+
+```ts
+const decision = result.meta.c0Decision
+const record = await Bun.file(result.meta.runRecordPath!).json()
+```
+
+The split exists because the consumer has a job the CLI does not: deciding which parts of the thinking to use, in which order, for which audience. Flattening the output into a single `thinking: string` would force every consumer to either parse the heads-up or accept it whole. Neither is good. The structured shape lets the consumer do whatever it wants.
 
 ---
 
@@ -127,7 +167,7 @@ A useful exercise: for any feature you are considering, ask "does this help the 
 
 A few examples of where the boundary is enforced:
 
-**`src/pipeline/run.ts`:** `runThinkingPipeline` returns `ThinkingOutput` with `thinking: string`. There is no `synthesizeFinalResponse` export.
+**`src/pipeline/run.ts`:** `runThinkingPipeline` returns `ThinkingOutput` with `headsUp: string`, `workers: Record<string, WorkerOutput>`, and `meta: ThinkingMeta`. There is no `synthesizeFinalResponse` export.
 
 **`bin/multimind.ts`:** The only subcommand that produces a result is `think`. There is no `answer`. The `config`, `status`, and `eval` subcommands are operational.
 

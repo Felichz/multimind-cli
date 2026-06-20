@@ -60,6 +60,16 @@ describe("public API", () => {
     expect((mod as any).synthesizeFinalResponse).toBeUndefined()
   })
 
+  test("the library does NOT export WorkerResult (renamed to WorkerOutput)", async () => {
+    // The shape changed: workers is now a map (Record<string, WorkerOutput>)
+    // instead of an array (WorkerResult[]). The rename + restructure
+    // happened because the consumer needs to address each worker by key
+    // (workers.W17) without scanning an array. If a future contributor
+    // re-adds WorkerResult, this test catches the regression.
+    const mod = await import("../src/index")
+    expect((mod as any).WorkerResult).toBeUndefined()
+  })
+
   test("OpenAICompatProvider is constructible and satisfies LLMProvider", async () => {
     const { OpenAICompatProvider } = await import("../src/llm/openai-compat")
     const provider = new OpenAICompatProvider({ baseUrl: "http://localhost:9999/v1" })

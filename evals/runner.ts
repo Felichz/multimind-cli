@@ -19,7 +19,7 @@ import path from "node:path"
 import { runThinkingPipeline } from "../src/pipeline/run"
 import { OpenAICompatProvider } from "../src/llm/openai-compat"
 import { judgeThinking } from "./scorer"
-import type { ThinkingInput, WorkerResult } from "../src/types"
+import type { ThinkingInput } from "../src/types"
 import type { LLMProvider } from "../src/llm/provider"
 
 const ROOT = path.join(import.meta.dir, "..")
@@ -165,15 +165,15 @@ async function runCase(testCase: Case, provider: LLMProvider, skipJudge: boolean
   // answering. The judge scores the heads-up directly — that is the
   // CLI's output, and the consumer is responsible for any further
   // post-processing (synthesis, UI, etc.).
-  const pipelineMs = pipelineResult.totalDurationMs
-  let score = pipelineResult.thinking ? (pipelineResult.thinking.length > 50 ? 80 : 30) : 0
+  const pipelineMs = pipelineResult.meta.totalDurationMs
+  let score = pipelineResult.headsUp ? (pipelineResult.headsUp.length > 50 ? 80 : 30) : 0
   let judgeReason = skipJudge ? "judge skipped" : "(no judge)"
   let judgeMissing: string[] = []
 
-  if (!skipJudge && pipelineResult.thinking) {
+  if (!skipJudge && pipelineResult.headsUp) {
     const judgeResult = await judgeThinking(provider, {
       caseID: testCase.id,
-      thinking: pipelineResult.thinking,
+      thinking: pipelineResult.headsUp,
       expectedQuality: testCase.expectedQuality,
       mustAvoid: testCase.mustAvoid,
       userMessage: testCase.userMessage,
@@ -185,20 +185,25 @@ async function runCase(testCase: Case, provider: LLMProvider, skipJudge: boolean
     judgeMissing = judgeResult.missing
   }
 
+  const workersFired = Object.keys(pipelineResult.workers)
+  const workerOutputs = Object.fromEntries(
+    Object.entries(pipelineResult.workers).map(([k, w]) => [k, w.output]),
+  )
+
   return {
     caseID: testCase.id,
     pass: score >= testCase.minScore,
     score,
     minScore: testCase.minScore,
-    routerDecision: pipelineResult.routerDecision,
-    workersFired: pipelineResult.workers.map((w) => w.key),
-    workerOutputs: Object.fromEntries(pipelineResult.workers.map((w) => [w.key, w.output])),
+    routerDecision: pipelineResult.meta.routerDecision,
+    workersFired,
+    workerOutputs,
     judgeReason,
     judgeMissing,
     pipelineMs,
     judgeMs: 0,
     totalMs: Date.now() - startedAt,
-    thinking: pipelineResult.thinking,
+    thinking: pipelineResult.headsUp,
   }
 }
 

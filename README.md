@@ -278,23 +278,55 @@ type Message = {
 
 ```ts
 type ThinkingOutput = {
-  thinking: string                          // the heads-up (markdown)
-  workers: WorkerResult[]                   // what fired, in order
-  routerDecision: "ACTIVATE" | "SKIP"
-  c0Decision?: "safe_to_end" | "continue" | "blocked" | "missing"
-  notes: string[]                           // free-form notes (e.g. "skipped: W0 said SKIP")
-  totalDurationMs: number
-  runRecordPath?: string                    // path to the full run record
+  headsUp: string                           // the consolidated heads-up (markdown)
+  workers: Record<string, WorkerOutput>     // per-worker outputs, keyed by worker key
+  meta: ThinkingMeta                        // pipeline-level metadata
 }
 
-type WorkerResult = {
-  key: string                               // "W2", "W4", etc.
+type WorkerOutput = {
+  key: string                               // "W2", "W4", etc. (also the map key)
   name: string                              // display name
   output: string                            // the worker's full response
   durationMs: number
   usage: { inputTokens: number; outputTokens: number }
   error?: string                            // present if the worker failed
 }
+
+type ThinkingMeta = {
+  sessionID?: string
+  routerDecision: "ACTIVATE" | "SKIP"
+  c0Decision?: "safe_to_end" | "continue" | "blocked" | "missing"
+  notes: string[]                           // free-form notes (e.g. "skipped: W0 said SKIP")
+  totalDurationMs: number
+  runRecordPath?: string                    // path to the full run record
+}
+```
+
+The shape is intentionally split so the consumer can pick which part to use without scanning the whole thing:
+
+- **`headsUp`** — the consolidated thinking. Inject this as context for the host LLM.
+- **`workers`** — each worker's raw output, keyed by worker name (`workers.W14`, `workers.W17`, ...). Useful for targeted inspection ("show me the security findings" → `workers.W17`).
+- **`meta`** — pipeline-level metadata. The router decision, the C0 verdict, timing, the run record path. Most consumers can ignore this; it's there for debugging and for the eval runner.
+
+A consumer that just wants the heads-up to feed its host LLM:
+
+```ts
+const result = await runThinkingPipeline(input, provider)
+const ctx = result.headsUp                          // markdown string
+```
+
+A consumer that wants to surface specific worker findings to the user:
+
+```ts
+const security = result.workers.W17?.output         // the security worker's full output
+const risks = result.workers.W4?.output             // the risk scanner's full output
+```
+
+A consumer that wants full telemetry:
+
+```ts
+const decision = result.meta.c0Decision             // "safe_to_end" | "continue" | "blocked" | "missing"
+const record = await Bun.file(result.meta.runRecordPath!).json()  // every prompt, every raw response
 ```
 
 ---

@@ -58,7 +58,7 @@ import {
   type SubconsciousConfig,
   type ThinkingInput,
   type ThinkingOutput,
-  type WorkerResult,
+  type WorkerOutput,
 } from "../types"
 
 const PROMPTS_DIR = path.join(import.meta.dir, "..", "prompts")
@@ -120,7 +120,7 @@ export async function runThinkingPipeline(
   if (!w0) {
     setDebugStatus(run, "error", "W0_ROUTER.md missing")
     await writeDebugRun(runsDir, run)
-    return { ...emptyOutput("w0_missing", startedAt), runRecordPath: runRecordPath(runsDir, run) }
+    return { ...emptyOutput("w0_missing", startedAt), meta: { ...emptyOutput("w0_missing", startedAt).meta, runRecordPath: runRecordPath(runsDir, run) } }
   }
 
   const recentHistory = formatHistory(messages)
@@ -153,12 +153,12 @@ export async function runThinkingPipeline(
   if (/STATUS:\s*SKIP/i.test(w0Output)) {
     setDebugStatus(run, "skipped", "Router skipped", { reason: extractReason(w0Output) })
     await writeDebugRun(runsDir, run)
-    return { ...emptyOutput("skipped", startedAt), runRecordPath: runRecordPath(runsDir, run) }
+    return { ...emptyOutput("skipped", startedAt), meta: { ...emptyOutput("skipped", startedAt).meta, runRecordPath: runRecordPath(runsDir, run) } }
   }
   if (!/STATUS:\s*ACTIVATE/i.test(w0Output)) {
     setDebugStatus(run, "error", "Router returned invalid output", { routerPreview: w0Output.slice(0, 500) })
     await writeDebugRun(runsDir, run)
-    return { ...emptyOutput("router_invalid", startedAt), runRecordPath: runRecordPath(runsDir, run) }
+    return { ...emptyOutput("router_invalid", startedAt), meta: { ...emptyOutput("router_invalid", startedAt).meta, runRecordPath: runRecordPath(runsDir, run) } }
   }
 
   // 2. Discover and run selected workers
@@ -169,7 +169,7 @@ export async function runThinkingPipeline(
       routerPreview: w0Output.slice(0, 500),
     })
     await writeDebugRun(runsDir, run)
-    return { ...emptyOutput("no_workers", startedAt), runRecordPath: runRecordPath(runsDir, run) }
+    return { ...emptyOutput("no_workers", startedAt), meta: { ...emptyOutput("no_workers", startedAt).meta, runRecordPath: runRecordPath(runsDir, run) } }
   }
 
   const w0Context = extractContext(w0Output)
@@ -186,7 +186,7 @@ export async function runThinkingPipeline(
   if (visibleResults.length === 0) {
     setDebugStatus(run, "skipped", "Workers produced no output")
     await writeDebugRun(runsDir, run)
-    return { ...emptyOutput("no_worker_output", startedAt), runRecordPath: runRecordPath(runsDir, run) }
+    return { ...emptyOutput("no_worker_output", startedAt), meta: { ...emptyOutput("no_worker_output", startedAt).meta, runRecordPath: runRecordPath(runsDir, run) } }
   }
 
   const insights: ConsolidatorInsight[] = visibleResults.map((worker) => ({ key: worker.key, name: worker.name, output: worker.output }))
@@ -248,26 +248,44 @@ export async function runThinkingPipeline(
   await writeInjectionDebug(runsDir, run, consolidated)
 
   return {
-    thinking: consolidated,
-    workers: workerResults,
-    routerDecision: "ACTIVATE",
-    c0Decision,
-    notes: [],
-    totalDurationMs: Date.now() - startedAt,
-    runRecordPath: runRecordPath(runsDir, run),
+    headsUp: consolidated,
+    workers: workersToMap(workerResults),
+    meta: {
+      sessionID: input.sessionID,
+      routerDecision: "ACTIVATE",
+      c0Decision,
+      notes: [],
+      totalDurationMs: Date.now() - startedAt,
+      runRecordPath: runRecordPath(runsDir, run),
+    },
   }
 }
 
 // ---------- helpers ----------
 
-function emptyOutput(reason: string, startedAt: number): ThinkingOutput {
+function emptyOutput(
+  reason: string,
+  startedAt: number,
+  sessionID?: string,
+): ThinkingOutput {
   return {
-    thinking: "",
-    workers: [],
-    routerDecision: "SKIP",
-    notes: [reason],
-    totalDurationMs: Date.now() - startedAt,
+    headsUp: "",
+    workers: {},
+    meta: {
+      sessionID,
+      routerDecision: "SKIP",
+      notes: [reason],
+      totalDurationMs: Date.now() - startedAt,
+    },
   }
+}
+
+function workersToMap(results: WorkerOutput[]): Record<string, WorkerOutput> {
+  const map: Record<string, WorkerOutput> = {}
+  for (const r of results) {
+    map[r.key] = r
+  }
+  return map
 }
 
 function latestMessage(messages: Message[], role: "user" | "assistant", includeSynthetic = true): Message | undefined {
@@ -398,7 +416,7 @@ async function runWorker(
   extDir: string,
   timeoutMs: number,
   signal: AbortSignal | undefined,
-): Promise<WorkerResult> {
+): Promise<WorkerOutput> {
   const startedAt = Date.now()
   if (!filename) {
     return { key, name: key, output: "", durationMs: 0, usage: { inputTokens: 0, outputTokens: 0 }, error: "prompt_missing" }
