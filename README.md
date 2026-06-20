@@ -1,14 +1,21 @@
 # multimind-cli
 
-> A background thinking pipeline that runs as a command. Provider-agnostic, stateless, designed to be driven by any LLM-powered tool.
-
 [![MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.5+-3178c6.svg)](https://www.typescriptlang.org)
 [![Bun](https://img.shields.io/badge/runtime-Bun-f9f1e1.svg)](https://bun.sh)
 [![version](https://img.shields.io/badge/version-0.1.0-green.svg)](https://github.com/Felichz/multimind-cli)
 
-```
+> A background thinking pipeline that runs as a command. Provider-agnostic, stateless, designed to be driven by any LLM-powered tool.
+
+**What it does:** you give it a conversation, it gives you back a structured "Subconscious Heads-Up" — a private piece of context for your host LLM, not a user-facing message. The CLI is for thinking. Your code is for answering.
+
+```bash
 $ echo '{"history": [...]}' | multimind think
+```
+
+The output is split on purpose so you can pick what you need:
+
+```json
 {
   "headsUp": "[Subconscious Heads-Up]\n\nThe cache strategy carries ...",
   "workers": {
@@ -25,7 +32,11 @@ $ echo '{"history": [...]}' | multimind think
 }
 ```
 
-Inject `headsUp` into your host LLM as context. Use `workers.W17` to surface security findings. Use `meta.c0Decision` as an internal signal. The CLI is for thinking; the consumer is for answering — see [AGENTS.md](AGENTS.md) for the full philosophy.
+- **`headsUp`** — the consolidated thinking. Inject this as context for your host LLM.
+- **`workers`** — each worker's raw output, keyed by worker (`workers.W17` is the security check). Surface specific findings to your user.
+- **`meta`** — pipeline metadata: router decision, C0 verdict, timing, the path to the full run record.
+
+The CLI deliberately does not produce user-facing messages — that is the consumer's job, by design. The full boundary is in [AGENTS.md](AGENTS.md).
 
 **Latest eval (M3, opencode-go HTTP, 3 of 52 cases spot-checked):**
 
