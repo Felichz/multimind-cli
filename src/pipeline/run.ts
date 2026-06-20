@@ -71,17 +71,6 @@ export type PipelineOptions = {
   runsDir?: string
   timeoutMs?: number
   signal?: AbortSignal
-  /**
-   * When true, the pipeline calls a "main agent" LLM step that takes the
-   * internal heads-up scaffolding and formulates a user-facing response.
-   * This is the same model the original opencode plugin used: the harness
-   * produced a heads-up, the main agent turned it into a user message.
-   *
-   * When false (default for backwards-compat), the pipeline returns the
-   * raw heads-up text as `thinking`. Useful for debugging and for
-   * integrations that want to do their own final-response synthesis.
-   */
-  synthesizeFinalResponse?: boolean
 }
 
 const FINAL_RESPONSE_SYSTEM = `You are a senior engineering agent who just received a "Subconscious Heads-Up" from your background thinking layer. The heads-up is a private completion contract: it tells you what the right path is, what the evidence gates are, and what the next concrete step is.
@@ -271,19 +260,8 @@ export async function runThinkingPipeline(
   await writeDebugRun(runsDir, run)
   await writeInjectionDebug(runsDir, run, consolidated)
 
-  // Optional: hand the heads-up to a main-agent LLM step that produces
-  // the user-facing response. The original opencode plugin did this
-  // implicitly (the heads-up was injected as context, the main agent's
-  // next turn produced the user-visible message). For the CLI, the
-  // default is the raw heads-up so debugging is straightforward; set
-  // `synthesizeFinalResponse: true` to get a user-facing response back.
-  let thinking = consolidated
-  if (options.synthesizeFinalResponse) {
-    thinking = await synthesizeFinalResponseCall(provider, consolidated, recentHistory, model, timeoutMs, options.signal)
-  }
-
   return {
-    thinking,
+    thinking: consolidated,
     workers: workerResults,
     routerDecision: "ACTIVATE",
     c0Decision,
@@ -291,6 +269,39 @@ export async function runThinkingPipeline(
     totalDurationMs: Date.now() - startedAt,
     runRecordPath: runRecordPath(runsDir, run),
   }
+}
+
+/**
+ * Take a heads-up (the output of `runThinkingPipeline`) and produce a
+ * user-facing response. This is a separate LLM call that the original
+ * opencode plugin handled implicitly: the heads-up was injected as
+ * synthetic context, the agent's next turn (handled by the host LLM)
+ * produced the user-visible message.
+ *
+ * This function is exposed so consumers (and the eval runner) can do
+ * the same thing explicitly when the host LLM is not in the loop.
+ */
+export async function synthesizeFinalResponse(
+  provider: LLMProvider,
+  headsUp: string,
+  recentHistory: string,
+  model?: { providerID: string; modelID: string },
+  options: { timeoutMs?: number; signal?: AbortSignal } = {},
+): Promise<string> {
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
+  return provider.complete(
+    {
+      system: FINAL_RESPONSE_SYSTEM,
+      messages: [
+        {
+          role: "user",
+          content: `Conversation history:\n${recentHistory}\n\nSubconscious heads-up (private — do not mention to user):\n${headsUp}\n\nProduce the next user-facing response.`,
+        },
+      ],
+      ...(model ? { model } : {}),
+    },
+    options.signal ?? AbortSignal.timeout(timeoutMs),
+  ).then((response) => response.content)
 }
 
 // ---------- helpers ----------
@@ -476,28 +487,4 @@ async function runWorker(
 
 function runRecordPath(runsDir: string, run: DebugRun): string {
   return path.join(runsDir, `${run.startedAt}-${run.id}.json`)
-}
-
-async function synthesizeFinalResponseCall(
-  provider: LLMProvider,
-  headsUp: string,
-  recentHistory: string,
-  model: { providerID: string; modelID: string },
-  timeoutMs: number,
-  signal: AbortSignal | undefined,
-): Promise<string> {
-  const response = await provider.complete(
-    {
-      system: FINAL_RESPONSE_SYSTEM,
-      messages: [
-        {
-          role: "user",
-          content: `Conversation history:\n${recentHistory}\n\nSubconscious heads-up (private — do not mention to user):\n${headsUp}\n\nProduce the next user-facing response.`,
-        },
-      ],
-      model,
-    },
-    signal ?? AbortSignal.timeout(timeoutMs),
-  )
-  return response.content
 }

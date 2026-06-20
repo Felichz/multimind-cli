@@ -16,7 +16,7 @@
  */
 
 import path from "node:path"
-import { runThinkingPipeline, OpenAICompatProvider } from "../src/index"
+import { runThinkingPipeline, synthesizeFinalResponse, OpenAICompatProvider } from "../src/index"
 import { configFilePath, loadConfig, saveConfig } from "../src/config-store"
 import type { ThinkingInput, ThinkingOutput } from "../src/types"
 
@@ -24,9 +24,19 @@ const USAGE = `multimind — background thinking pipeline
 
 Usage:
   multimind think [--input file] [--output file] [--model provider/model]
+  multimind answer [--input file] [--output file] [--model provider/model]
   multimind config [show | set <key> <value> | path | init]
   multimind status
   multimind eval [--case ID] [--limit N] [--no-judge] [--output file]
+
+"think" returns the raw thinking (the heads-up). The intended use is
+to feed it as context to a host LLM (e.g. an opencode agent) which
+then produces the user-facing response as part of its next turn.
+
+"answer" returns a tight user-facing response. It runs the pipeline
+plus a downstream LLM step that turns the heads-up into a message
+suitable for direct delivery. Use this when no host LLM is in the
+loop.
 
 Input: JSON object on stdin or --input, with shape:
   {
@@ -73,7 +83,7 @@ async function main() {
     return
   }
 
-  if (command !== "think") {
+  if (command !== "think" && command !== "answer") {
     console.error(`Unknown command: ${command}\n\n${USAGE}`)
     process.exit(1)
   }
@@ -82,9 +92,32 @@ async function main() {
   const model = input.model ?? process.env.MULTIMIND_MODEL
 
   const provider = new OpenAICompatProvider()
-  const result = await runThinkingPipeline({ ...input, model }, provider)
+  const pipelineResult = await runThinkingPipeline({ ...input, model }, provider)
 
-  await writeOutput(args, result)
+  if (command === "answer") {
+    // The "answer" command runs the full flow: pipeline (heads-up) +
+    // a downstream LLM step that turns the heads-up into a tight
+    // user-facing message. In an opencode-style integration the host's
+    // LLM does this step naturally as part of its next turn; the
+    // "answer" command is the standalone equivalent.
+    const recentHistory = (input.history ?? [])
+      .filter((m) => m.info.role === "user" || m.info.role === "assistant")
+      .map((m) => {
+        const text = m.parts.filter((p) => p.type === "text").map((p) => p.text).join("")
+        return `[${m.info.role === "user" ? "User" : "Assistant"}]: ${text}`
+      })
+      .join("\n\n")
+    const synthesized = await synthesizeFinalResponse(
+      provider,
+      pipelineResult.thinking,
+      recentHistory,
+      model ? { providerID: model.split("/")[0]!, modelID: model.split("/").slice(1).join("/") } : undefined,
+    )
+    await writeOutput(args, { ...pipelineResult, thinking: synthesized })
+    return
+  }
+
+  await writeOutput(args, pipelineResult)
 }
 
 async function runConfig(args: string[]): Promise<void> {

@@ -1,4 +1,4 @@
-export { runThinkingPipeline, type PipelineOptions } from "./pipeline/run"
+export { runThinkingPipeline, synthesizeFinalResponse, type PipelineOptions } from "./pipeline/run"
 export { OpenAICompatProvider, type OpenAICompatConfig } from "./llm/openai-compat"
 export type { LLMProvider, LLMRequest, LLMResponse, LLMMessage, LLMError } from "./llm/provider"
 export * as Consolidator from "./consolidator"
