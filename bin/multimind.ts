@@ -17,6 +17,7 @@
  */
 
 import path from "node:path"
+import readline from "node:readline"
 import { runThinkingPipeline, OpenAICompatProvider } from "../src/index"
 import { configFilePath, loadConfig, saveConfig } from "../src/config-store"
 import type { ThinkingInput, ThinkingOutput } from "../src/types"
@@ -156,7 +157,6 @@ async function runConfigInit(): Promise<void> {
 function prompt(question: string): Promise<string> {
   return new Promise((resolve) => {
     process.stdout.write(question)
-    const readline = require("node:readline") as typeof import("node:readline")
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: false })
     rl.once("line", (line) => {
       rl.close()
