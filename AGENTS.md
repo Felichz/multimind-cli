@@ -199,3 +199,31 @@ If you are not sure, default to leaving the feature out. The CLI is small on pur
 The boundary is enforced by tests, by the public exports list, by the CLI's subcommand surface, and by this document. None of these are unbreakable. Anyone can change them. If you change them, the change should be in a pull request that explicitly addresses the question: "why is the consumer no longer the right place for this?"
 
 If the answer is "the consumer cannot do it," that is a different conversation. But start from the assumption that the consumer is always the right place, and earn the right to put it in the CLI.
+
+---
+
+## Reading order for newcomers
+
+If you are opening this repo for the first time, read the files in this order. The first three are the most important; the rest is implementation.
+
+1. **README.md** — "Why this exists" and "The design" sections. Establishes what the project is and why it exists.
+2. **AGENTS.md** (this file) — top to bottom. Explains the boundary, which is the single most important thing to internalize.
+3. **src/types.ts** — the public contract. Every field on `ThinkingInput` and `ThinkingOutput` is documented.
+4. **src/pipeline/run.ts** — the orchestrator. The header comment lists the 9 steps; the body implements them.
+5. **src/judge.ts** — the rubric. How the CLI measures whether the thinking is good.
+6. **src/llm/openai-compat.ts** — the default provider. ~150 lines, plain `fetch`, no SDK. Useful as a reference for implementing your own.
+7. Everything else — the engines, the consolidator, the CLI, the test suite, the prompt files. Read on demand.
+
+A 30-minute skim of the first four gives you everything you need to start contributing. The rest is reference material for specific changes.
+
+---
+
+## Maintenance notes for future contributors
+
+A few invariants that have caused real bugs when violated. If you change something that touches one of these, the change is larger than the diff:
+
+- **The output shape is part of the contract.** If you change `ThinkingOutput`, `ThinkingMeta`, `WorkerOutput`, or any of their fields, you are making a breaking change for every consumer. Update README, AGENTS.md, the contract tests, and the README's "The output shape" section in the same commit.
+- **`prompts-extensions/` is gitignored on purpose.** It is per-user state. Do not commit anything from that directory. The `.gitkeep` file is the only thing that should be there.
+- **The `g` flag on a shared RegExp is dangerous.** `RegExp.prototype.test()` advances `lastIndex` permanently on the shared object. A subsequent `matchAll` on the same regex will silently skip matches. If you add a new marker pattern, clone the regex for any `test()` call (see `hasResearchTriggers` in `src/engines/research-engine.ts` for the pattern).
+- **The judge prompt is calibrated.** `src/judge.ts` has scoring bands, strictness rules, and a structural contract that the eval suite depends on. Tweaking any band silently shifts the pass rate. If you change it, run the full eval suite before and after, and document the change in the commit message.
+- **The CLI is for thinking, not answering.** If a feature would let the CLI produce a user-facing response, it does not belong here. The tests in `tests/contract.test.ts` (`the library does NOT export synthesizeFinalResponse`) are the second line of defense after this document.
