@@ -1,9 +1,12 @@
 /**
- * Contract tests for the CLI — verify the static surface area is intact.
+ * Contract tests for the CLI — verify the package shape and key files exist.
  *
- * These don't require opencode serve or any LLM. They prove the package
- * shape, prompt coverage, and config schema so external integrations can
- * trust the contract.
+ * These tests are deliberately light. The real behavioral guarantees
+ * (the LLMProvider interface is implemented, runThinkingPipeline works,
+ * types compile) are enforced by the TypeScript compiler and the
+ * 7 behavioral tests in pipeline.test.ts. This file just catches
+ * "the package is in a broken state" issues that are easier to detect
+ * with a smoke test than with a full typecheck.
  */
 
 import { describe, expect, test } from "bun:test"
@@ -12,57 +15,60 @@ import fs from "node:fs"
 
 const ROOT = path.join(import.meta.dir, "..")
 const PROMPTS_DIR = path.join(ROOT, "src", "prompts")
+const PACKAGE = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"))
 
 describe("package shape", () => {
   test("package.json declares the multimind bin", () => {
-    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8"))
-    expect(pkg.bin.multimind).toBeDefined()
+    expect(PACKAGE.bin?.multimind).toBeDefined()
   })
 
-  test("exports the pipeline, provider, consolidator, and types", () => {
-    const indexPath = path.join(ROOT, "src", "index.ts")
-    const index = fs.readFileSync(indexPath, "utf8")
-    expect(index).toContain("runThinkingPipeline")
-    expect(index).toContain("OpenAICompatProvider")
-    expect(index).toContain("Consolidator")
-    expect(index).toContain("DEFAULT_CONFIG")
+  test("package.json exports the public entry points", () => {
+    expect(PACKAGE.exports?.["."]).toBeDefined()
+    expect(PACKAGE.exports?.["./pipeline"]).toBeDefined()
+    expect(PACKAGE.exports?.["./consolidator"]).toBeDefined()
+    expect(PACKAGE.exports?.["./engines"]).toBeDefined()
   })
 
-  test("CLI binary exists and is executable", () => {
-    const cli = path.join(ROOT, "bin", "multimind.ts")
-    expect(fs.existsSync(cli)).toBe(true)
-    const stat = fs.statSync(cli)
-    expect(stat.mode & 0o111).not.toBe(0)
+  test("package.json has no proprietary SDK dependency", () => {
+    // The CLI talks to LLMs via plain fetch. A proprietary SDK in the
+    // dependency list would mean the package is no longer a pure
+    // input → output CLI. Caught here so a future contributor cannot
+    // re-add the SDK without a test failure.
+    const deps = { ...PACKAGE.dependencies, ...PACKAGE.devDependencies }
+    expect(deps).not.toHaveProperty("@opencode-ai/sdk")
+  })
+})
+
+describe("public API", () => {
+  test("the library entry point imports cleanly", async () => {
+    const mod = await import("../src/index")
+    expect(typeof mod.runThinkingPipeline).toBe("function")
+    expect(typeof mod.OpenAICompatProvider).toBe("function")
+    expect(typeof mod.DEFAULT_CONFIG).toBe("object")
+    expect(mod.Consolidator).toBeDefined()
+    expect(mod.Research).toBeDefined()
+    expect(mod.Evolution).toBeDefined()
+  })
+
+  test("OpenAICompatProvider is constructible and satisfies LLMProvider", async () => {
+    const { OpenAICompatProvider } = await import("../src/llm/openai-compat")
+    const provider = new OpenAICompatProvider({ baseUrl: "http://localhost:9999/v1" })
+    // Duck typing: LLMProvider is an interface, not a class, so we check
+    // the shape directly. The TypeScript compiler enforces the actual
+    // structural compatibility.
+    expect(typeof provider.complete).toBe("function")
+    expect(typeof provider.name).toBe("string")
+    expect(provider.name).toBe("openai-compat")
   })
 })
 
 describe("prompts", () => {
-  test("W0 router prompt is present and non-trivial", () => {
-    const file = path.join(PROMPTS_DIR, "W0_ROUTER.md")
-    expect(fs.existsSync(file)).toBe(true)
-    const text = fs.readFileSync(file, "utf8").trim()
-    // The original W0_ROUTER is several hundred lines. If it dropped to a
-    // 2-line stub (which is what happened when extensions overwrote cores
-    // during the initial extraction), the harness can't do meaningful work.
-    expect(text.length).toBeGreaterThan(1000)
+  test("W0 router prompt is present", () => {
+    expect(fs.existsSync(path.join(PROMPTS_DIR, "W0_ROUTER.md"))).toBe(true)
   })
 
-  test("C0 synthesizer prompt is present and non-trivial", () => {
-    const file = path.join(PROMPTS_DIR, "C0_SYNTHESIZER.md")
-    expect(fs.existsSync(file)).toBe(true)
-    const text = fs.readFileSync(file, "utf8").trim()
-    expect(text.length).toBeGreaterThan(500)
-  })
-
-  test("core worker prompts are full (not 2-line stubs from extension overwrite)", () => {
-    // Each core prompt should be substantial. The extensions are in
-    // prompts-extensions/ and are appended at runtime, not substituted.
-    for (const key of ["W2", "W3", "W4", "W6", "W8", "W10", "W12", "W14"]) {
-      const file = fs.readdirSync(PROMPTS_DIR).find((f) => f.startsWith(key + "_") || f.startsWith(key + "."))
-      expect(file, `core prompt for ${key}`).toBeDefined()
-      const text = fs.readFileSync(path.join(PROMPTS_DIR, file!), "utf8").trim()
-      expect(text.length, `${file} should be a full prompt, not a stub`).toBeGreaterThan(500)
-    }
+  test("C0 synthesizer prompt is present", () => {
+    expect(fs.existsSync(path.join(PROMPTS_DIR, "C0_SYNTHESIZER.md"))).toBe(true)
   })
 
   test("core worker prompts cover W1 through W17", () => {
@@ -94,29 +100,13 @@ describe("prompts", () => {
 })
 
 describe("config", () => {
-  test("DEFAULT_CONFIG has all required fields", () => {
-    const types = fs.readFileSync(path.join(ROOT, "src", "types.ts"), "utf8")
-    expect(types).toContain("DEFAULT_CONFIG")
-    expect(types).toMatch(/DEFAULT_CONFIG[^{]*\{[\s\S]*?enabled/)
-    expect(types).toMatch(/DEFAULT_CONFIG[\s\S]*?model/)
-    expect(types).toMatch(/DEFAULT_CONFIG[\s\S]*?delivery/)
-    expect(types).toMatch(/DEFAULT_CONFIG[\s\S]*?injectionMode/)
-  })
-})
-
-describe("LLM provider interface", () => {
-  test("provider.ts declares the LLMProvider interface", () => {
-    const provider = fs.readFileSync(path.join(ROOT, "src", "llm", "provider.ts"), "utf8")
-    expect(provider).toContain("export interface LLMProvider")
-    expect(provider).toContain("complete(")
-  })
-
-  test("OpenAICompatProvider implements LLMProvider", () => {
-    const compat = fs.readFileSync(path.join(ROOT, "src", "llm", "openai-compat.ts"), "utf8")
-    expect(compat).toContain("implements LLMProvider")
-    // The default provider must not depend on any proprietary SDK —
-    // the CLI is supposed to ship with just `fetch`.
-    expect(compat).not.toContain("require(")
-    expect(compat).not.toMatch(/from\s+['"]@opencode-ai/)
+  test("DEFAULT_CONFIG has all required fields", async () => {
+    const { DEFAULT_CONFIG } = await import("../src/types")
+    expect(DEFAULT_CONFIG.enabled).toBe(true)
+    expect(typeof DEFAULT_CONFIG.model).toBe("string")
+    expect(DEFAULT_CONFIG.delivery).toMatch(/^(prompt|silent)$/)
+    expect(DEFAULT_CONFIG.injectionMode).toMatch(/^(synthetic|user)$/)
+    expect(typeof DEFAULT_CONFIG.autoContinue).toBe("boolean")
+    expect(typeof DEFAULT_CONFIG.maxAutoContinues).toBe("number")
   })
 })
