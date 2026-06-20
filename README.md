@@ -7,36 +7,13 @@
 
 > A background thinking pipeline that runs as a command. Provider-agnostic, stateless, designed to be driven by any LLM-powered tool.
 
-**What it does:** you give it a conversation, it gives you back a structured "Subconscious Heads-Up" — a private piece of context for your host LLM, not a user-facing message. The CLI is for thinking. Your code is for answering.
+You give it a conversation, it gives you back a "Subconscious Heads-Up" — a structured, private piece of context for your host LLM. The CLI is for thinking. Your code is for answering.
 
-```bash
-$ echo '{"history": [...]}' | multimind think
-```
-
-The output is split on purpose so you can pick what you need:
-
-```json
-{
-  "headsUp": "[Subconscious Heads-Up]\n\nThe cache strategy carries ...",
-  "workers": {
-    "W2":  { "key": "W2",  "name": "GAP DETECTOR",      "output": "..." },
-    "W4":  { "key": "W4",  "name": "RISK SCANNER",      "output": "..." },
-    "W14": { "key": "W14", "name": "DELIVERY CONTRACT", "output": "..." }
-  },
-  "meta": {
-    "routerDecision": "ACTIVATE",
-    "c0Decision": "safe_to_end",
-    "totalDurationMs": 8421,
-    "runRecordPath": ".multimind/runs/...json"
-  }
-}
-```
-
-- **`headsUp`** — the consolidated thinking. Inject this as context for your host LLM.
-- **`workers`** — each worker's raw output, keyed by worker (`workers.W17` is the security check). Surface specific findings to your user.
-- **`meta`** — pipeline metadata: router decision, C0 verdict, timing, the path to the full run record.
+What it does, in one paragraph: a small set of background lenses (W0 through W17) review the latest exchange and produce a completion contract — a written agreement about what was actually verified, what was merely claimed, and what's left to do. The output is split into `headsUp` (the consolidated thinking), `workers` (per-lens raw output, keyed by worker), and `meta` (pipeline metadata). You pick which parts to use; the CLI does not decide for you.
 
 The CLI deliberately does not produce user-facing messages — that is the consumer's job, by design. The full boundary is in [AGENTS.md](AGENTS.md).
+
+You can use it three ways: as a CLI (`multimind think < conversation.json`), as a library (`runThinkingPipeline(input, provider)`), or as the thinking layer in your own host agent (the opencode plugin, a Codex skill, a Claude Code skill, anything that can capture a conversation and inject a response).
 
 **Latest eval (M3, opencode-go HTTP, 3 of 52 cases spot-checked):**
 
