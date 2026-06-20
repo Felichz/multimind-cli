@@ -13,7 +13,10 @@ const DATASET = path.join(import.meta.dir, "..", "evals", "dataset.jsonl")
 describe("eval dataset", () => {
   test("exists and is non-empty", async () => {
     const text = await readFile(DATASET, "utf8")
-    const lines = text.split("\n").map((l) => l.trim()).filter(Boolean)
+    const lines = text
+      .split("\n")
+      .map((l) => l.trim())
+      .filter(Boolean)
     expect(lines.length).toBeGreaterThan(0)
   })
 

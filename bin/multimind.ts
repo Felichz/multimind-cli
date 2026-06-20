@@ -18,8 +18,8 @@
 
 import path from "node:path"
 import readline from "node:readline"
-import { runThinkingPipeline, OpenAICompatProvider } from "../src/index"
 import { configFilePath, loadConfig, saveConfig } from "../src/config-store"
+import { OpenAICompatProvider, runThinkingPipeline } from "../src/index"
 import type { ThinkingInput, ThinkingOutput } from "../src/types"
 
 const USAGE = `multimind — background thinking pipeline
@@ -139,14 +139,14 @@ async function runConfig(args: string[]): Promise<void> {
 }
 
 async function runConfigInit(): Promise<void> {
-  const prompts: Array<[string, string]> = [
+  const prompts: [string, string][] = [
     ["baseUrl", "Base URL of OpenAI-compatible endpoint"],
     ["apiKey", "API key (leave empty if not needed)"],
     ["model", "Default model (e.g. minimax-m3, gpt-4, llama3)"],
   ]
   const patch: Record<string, string | number> = {}
   for (const [key, label] of prompts) {
-    const answer = await prompt(label + ": ")
+    const answer = await prompt(`${label}: `)
     if (answer) patch[key] = answer
   }
   const filePath = await saveConfig(patch)

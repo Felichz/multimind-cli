@@ -23,15 +23,16 @@ export type ExtensionRequest = {
 }
 
 export function hasEvolutionTriggers(insights: WorkerInsight[]): boolean {
-  return insights.some((insight) => WRITE_EXTENSION.test(insight.output) || SYNTHETIC_TEST.test(insight.output))
+  return insights.some(
+    (insight) => WRITE_EXTENSION.test(insight.output) || SYNTHETIC_TEST.test(insight.output),
+  )
 }
 
 export function extractExtensionRequests(insights: WorkerInsight[]): ExtensionRequest[] {
   const requests: ExtensionRequest[] = []
   for (const insight of insights) {
-    WRITE_EXTENSION.lastIndex = 0
-    let match: RegExpExecArray | null
-    while ((match = WRITE_EXTENSION.exec(insight.output))) {
+    const matches = insight.output.matchAll(WRITE_EXTENSION)
+    for (const match of matches) {
       try {
         const parsed = JSON.parse(match[1]) as { target?: string; reason?: string }
         if (typeof parsed.target === "string" && typeof parsed.reason === "string") {
@@ -51,7 +52,7 @@ export async function processEvolutionTriggers(
   extDir: string,
   provider: LLMProvider,
   model: ModelSelection,
-  runsDir: string,
+  _runsDir: string,
 ): Promise<{ extensionRequests: ExtensionRequest[]; notes: string[] }> {
   const requests = extractExtensionRequests(insights)
   const notes: string[] = []
@@ -66,7 +67,10 @@ export async function processEvolutionTriggers(
     const testResponse = await provider.complete({
       system: w12Prompt,
       messages: [
-        { role: "user", content: `Generate a synthetic test for target: ${request.target}\n\nReason: ${request.reason}` },
+        {
+          role: "user",
+          content: `Generate a synthetic test for target: ${request.target}\n\nReason: ${request.reason}`,
+        },
       ],
       model,
     })
@@ -81,10 +85,12 @@ async function loadPrompt(coreDir: string, extDir: string, filename: string): Pr
   if (!(await core.exists())) return undefined
   const ext = Bun.file(path.join(extDir, filename))
   const extText = (await ext.exists()) ? await ext.text() : ""
-  return [
-    (await core.text()).trim(),
-    extText.trim() ? `\n\n--- SYSTEM EXTENSIONS & USER REFINEMENTS ---\n${extText.trim()}` : "",
-  ]
-    .join("")
-    .trim() || undefined
+  return (
+    [
+      (await core.text()).trim(),
+      extText.trim() ? `\n\n--- SYSTEM EXTENSIONS & USER REFINEMENTS ---\n${extText.trim()}` : "",
+    ]
+      .join("")
+      .trim() || undefined
+  )
 }

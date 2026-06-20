@@ -10,8 +10,8 @@
  * checks env vars first and falls back to the file.
  */
 
-import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { existsSync } from "node:fs"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import os from "node:os"
 import path from "node:path"
 

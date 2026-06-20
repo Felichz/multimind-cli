@@ -26,20 +26,18 @@
  * The pipeline is stateless: every invocation is a fresh think.
  */
 
-import path from "node:path"
 import { mkdir } from "node:fs/promises"
-import type { LLMProvider } from "../llm/provider"
+import path from "node:path"
 import {
+  type ConsolidatorInsight,
   buildSynthesizerPrompt,
   consolidateForMainAgent,
   consolidateSynthesizerForMainAgent,
   consolidateWithDistilledWorkerKernels,
   parseDistilledWorkerKernels,
-  type ConsolidatorInsight,
 } from "../consolidator"
-import { hasResearchTriggers, processResearchTriggers } from "../engines/research-engine"
-import { hasEvolutionTriggers, processEvolutionTriggers } from "../engines/evolution-engine"
 import {
+  type DebugRun,
   addDebugEvent,
   createDebugRun,
   failDebugWorker,
@@ -49,11 +47,13 @@ import {
   writeDebugRun,
   writeInjectionDebug,
   writeWorkerOutputDebug,
-  type DebugRun,
 } from "../debug-store"
+import { hasEvolutionTriggers, processEvolutionTriggers } from "../engines/evolution-engine"
+import { hasResearchTriggers, processResearchTriggers } from "../engines/research-engine"
+import type { LLMProvider } from "../llm/provider"
 import {
-  DEFAULT_CONFIG,
   type C0Decision,
+  DEFAULT_CONFIG,
   type Message,
   type SubconsciousConfig,
   type ThinkingInput,
@@ -120,7 +120,10 @@ export async function runThinkingPipeline(
   if (!w0) {
     setDebugStatus(run, "error", "W0_ROUTER.md missing")
     await writeDebugRun(runsDir, run)
-    return { ...emptyOutput("w0_missing", startedAt), meta: { ...emptyOutput("w0_missing", startedAt).meta, runRecordPath: runRecordPath(runsDir, run) } }
+    return {
+      ...emptyOutput("w0_missing", startedAt),
+      meta: { ...emptyOutput("w0_missing", startedAt).meta, runRecordPath: runRecordPath(runsDir, run) },
+    }
   }
 
   const recentHistory = formatHistory(messages)
@@ -145,7 +148,9 @@ export async function runThinkingPipeline(
       timeoutMs,
       options.signal,
     )
-    addDebugEvent(run, "routing", "Retried W0 router after invalid output", { routerPreview: rawW0.slice(0, 500) })
+    addDebugEvent(run, "routing", "Retried W0 router after invalid output", {
+      routerPreview: rawW0.slice(0, 500),
+    })
   }
   setDebugStatus(run, "running", "W0 router complete")
   await writeDebugRun(runsDir, run)
@@ -153,12 +158,18 @@ export async function runThinkingPipeline(
   if (/STATUS:\s*SKIP/i.test(w0Output)) {
     setDebugStatus(run, "skipped", "Router skipped", { reason: extractReason(w0Output) })
     await writeDebugRun(runsDir, run)
-    return { ...emptyOutput("skipped", startedAt), meta: { ...emptyOutput("skipped", startedAt).meta, runRecordPath: runRecordPath(runsDir, run) } }
+    return {
+      ...emptyOutput("skipped", startedAt),
+      meta: { ...emptyOutput("skipped", startedAt).meta, runRecordPath: runRecordPath(runsDir, run) },
+    }
   }
   if (!/STATUS:\s*ACTIVATE/i.test(w0Output)) {
     setDebugStatus(run, "error", "Router returned invalid output", { routerPreview: w0Output.slice(0, 500) })
     await writeDebugRun(runsDir, run)
-    return { ...emptyOutput("router_invalid", startedAt), meta: { ...emptyOutput("router_invalid", startedAt).meta, runRecordPath: runRecordPath(runsDir, run) } }
+    return {
+      ...emptyOutput("router_invalid", startedAt),
+      meta: { ...emptyOutput("router_invalid", startedAt).meta, runRecordPath: runRecordPath(runsDir, run) },
+    }
   }
 
   // 2. Discover and run selected workers
@@ -169,7 +180,10 @@ export async function runThinkingPipeline(
       routerPreview: w0Output.slice(0, 500),
     })
     await writeDebugRun(runsDir, run)
-    return { ...emptyOutput("no_workers", startedAt), meta: { ...emptyOutput("no_workers", startedAt).meta, runRecordPath: runRecordPath(runsDir, run) } }
+    return {
+      ...emptyOutput("no_workers", startedAt),
+      meta: { ...emptyOutput("no_workers", startedAt).meta, runRecordPath: runRecordPath(runsDir, run) },
+    }
   }
 
   const w0Context = extractContext(w0Output)
@@ -178,7 +192,20 @@ export async function runThinkingPipeline(
 
   const workerResults = await Promise.all(
     selectedKeys.map((key) =>
-      runWorker(provider, key, workerFiles[key], recentHistory, w0Context, model, run, runsDir, promptsDir, promptsExtDir, timeoutMs, options.signal),
+      runWorker(
+        provider,
+        key,
+        workerFiles[key],
+        recentHistory,
+        w0Context,
+        model,
+        run,
+        runsDir,
+        promptsDir,
+        promptsExtDir,
+        timeoutMs,
+        options.signal,
+      ),
     ),
   )
   const visibleResults = workerResults.filter((r) => r.output.trim() && !r.error)
@@ -186,10 +213,20 @@ export async function runThinkingPipeline(
   if (visibleResults.length === 0) {
     setDebugStatus(run, "skipped", "Workers produced no output")
     await writeDebugRun(runsDir, run)
-    return { ...emptyOutput("no_worker_output", startedAt), meta: { ...emptyOutput("no_worker_output", startedAt).meta, runRecordPath: runRecordPath(runsDir, run) } }
+    return {
+      ...emptyOutput("no_worker_output", startedAt),
+      meta: {
+        ...emptyOutput("no_worker_output", startedAt).meta,
+        runRecordPath: runRecordPath(runsDir, run),
+      },
+    }
   }
 
-  const insights: ConsolidatorInsight[] = visibleResults.map((worker) => ({ key: worker.key, name: worker.name, output: worker.output }))
+  const insights: ConsolidatorInsight[] = visibleResults.map((worker) => ({
+    key: worker.key,
+    name: worker.name,
+    output: worker.output,
+  }))
 
   // 3. Engines (research, evolution)
   if (config.research !== false && hasResearchTriggers(insights)) {
@@ -198,7 +235,14 @@ export async function runThinkingPipeline(
     await writeDebugRun(runsDir, run)
   }
   if (config.evolution !== false && hasEvolutionTriggers(insights)) {
-    const { notes } = await processEvolutionTriggers(insights, promptsDir, promptsExtDir, provider, model, runsDir)
+    const { notes } = await processEvolutionTriggers(
+      insights,
+      promptsDir,
+      promptsExtDir,
+      provider,
+      model,
+      runsDir,
+    )
     addDebugEvent(run, "evolving", "Processed evolution triggers", { notes: notes.length })
     await writeDebugRun(runsDir, run)
   }
@@ -231,12 +275,15 @@ export async function runThinkingPipeline(
   }
 
   // 5. Choose consolidator (matches the original's branching)
-  const distilledKernels = config.distilledKernels === true
-    ? parseDistilledWorkerKernels(
-        await loadFile(path.join(promptsDir, "worker-kernels.md")) +
-        (await loadFile(path.join(promptsExtDir, "worker-kernels.md")).then((t) => t ? `\n--- SYSTEM EXTENSIONS & USER REFINEMENTS ---\n${t}` : "")),
-      )
-    : []
+  const distilledKernels =
+    config.distilledKernels === true
+      ? parseDistilledWorkerKernels(
+          (await loadFile(path.join(promptsDir, "worker-kernels.md"))) +
+            (await loadFile(path.join(promptsExtDir, "worker-kernels.md")).then((t) =>
+              t ? `\n--- SYSTEM EXTENSIONS & USER REFINEMENTS ---\n${t}` : "",
+            )),
+        )
+      : []
   const consolidated = c0Output
     ? consolidateSynthesizerForMainAgent({ synthesis: c0Output, insights })
     : distilledKernels.length
@@ -263,11 +310,7 @@ export async function runThinkingPipeline(
 
 // ---------- helpers ----------
 
-function emptyOutput(
-  reason: string,
-  startedAt: number,
-  sessionID?: string,
-): ThinkingOutput {
+function emptyOutput(reason: string, startedAt: number, sessionID?: string): ThinkingOutput {
   return {
     headsUp: "",
     workers: {},
@@ -288,7 +331,11 @@ function workersToMap(results: WorkerOutput[]): Record<string, WorkerOutput> {
   return map
 }
 
-function latestMessage(messages: Message[], role: "user" | "assistant", includeSynthetic = true): Message | undefined {
+function latestMessage(
+  messages: Message[],
+  role: "user" | "assistant",
+  includeSynthetic = true,
+): Message | undefined {
   return messages
     .filter((message) => message.info.role === role)
     .filter((message) => includeSynthetic || !isInjectedContext(message))
@@ -321,13 +368,14 @@ function formatHistory(messages: Message[]): string {
  * the separator "--- SYSTEM EXTENSIONS & USER REFINEMENTS ---" comes
  * from the source.
  */
-async function loadPromptWithExtensions(coreDir: string, extDir: string, filename: string): Promise<string | undefined> {
+async function loadPromptWithExtensions(
+  coreDir: string,
+  extDir: string,
+  filename: string,
+): Promise<string | undefined> {
   const core = await loadFile(path.join(coreDir, filename))
   const ext = await loadFile(path.join(extDir, filename))
-  const content = [
-    core,
-    ext ? `\n\n--- SYSTEM EXTENSIONS & USER REFINEMENTS ---\n${ext}` : "",
-  ].join("")
+  const content = [core, ext ? `\n\n--- SYSTEM EXTENSIONS & USER REFINEMENTS ---\n${ext}` : ""].join("")
   return content.trim() ? content : undefined
 }
 
@@ -361,9 +409,7 @@ async function discoverWorkers(coreDir: string, extDir: string): Promise<Record<
       const key = `${dir}:${match[1]}`
       if (seenInDir.has(key)) {
         throw new Error(
-          `Duplicate worker file for ${match[1]} in ${dir}: ` +
-          `"${seenInDir.get(key)}" and "${file}". ` +
-          `Remove one, or merge their content.`,
+          `Duplicate worker file for ${match[1]} in ${dir}: "${seenInDir.get(key)}" and "${file}". Remove one, or merge their content.`,
         )
       }
       seenInDir.set(key, file)
@@ -380,7 +426,7 @@ async function discoverWorkers(coreDir: string, extDir: string): Promise<Record<
 }
 
 function pickWorkers(w0Output: string, workerFiles: Record<string, string>, override?: string[]): string[] {
-  if (override && override.length) {
+  if (override?.length) {
     return override.filter((key) => workerFiles[key])
   }
   const searchArea = w0Output.match(/WORKERS:\s*(.+)/i)?.[1] ?? w0Output
@@ -442,22 +488,40 @@ async function runWorker(
 ): Promise<WorkerOutput> {
   const startedAt = Date.now()
   if (!filename) {
-    return { key, name: key, output: "", durationMs: 0, usage: { inputTokens: 0, outputTokens: 0 }, error: "prompt_missing" }
+    return {
+      key,
+      name: key,
+      output: "",
+      durationMs: 0,
+      usage: { inputTokens: 0, outputTokens: 0 },
+      error: "prompt_missing",
+    }
   }
   const instruction = await loadPromptWithExtensions(coreDir, extDir, filename)
   if (!instruction) {
-    return { key, name: filename, output: "", durationMs: 0, usage: { inputTokens: 0, outputTokens: 0 }, error: "prompt_missing" }
+    return {
+      key,
+      name: filename,
+      output: "",
+      durationMs: 0,
+      usage: { inputTokens: 0, outputTokens: 0 },
+      error: "prompt_missing",
+    }
   }
 
-  const displayName = filename.replace(/^W\d+_/, "").replace(".md", "").replaceAll("_", " ")
+  const displayName = filename
+    .replace(/^W\d+_/, "")
+    .replace(".md", "")
+    .replaceAll("_", " ")
   const title = `multimind-${key.toLowerCase()}`
   const debugID = startDebugWorker(run, { key, name: displayName, title, tools: ["read", "grep", "glob"] })
   await writeDebugRun(runsDir, run)
 
   // W13 (research) gets web tools; everyone else gets just file tools
-  const tools = key === "W13"
-    ? { read: true, grep: true, glob: true, webfetch: true, websearch: true }
-    : { read: true, grep: true, glob: true }
+  const _tools =
+    key === "W13"
+      ? { read: true, grep: true, glob: true, webfetch: true, websearch: true }
+      : { read: true, grep: true, glob: true }
 
   try {
     const output = await callProvider(
@@ -471,12 +535,25 @@ async function runWorker(
     finishDebugWorker(run, debugID, output)
     await writeWorkerOutputDebug(runsDir, run, debugID, output)
     await writeDebugRun(runsDir, run)
-    return { key, name: displayName, output, durationMs: Date.now() - startedAt, usage: { inputTokens: 0, outputTokens: 0 } }
+    return {
+      key,
+      name: displayName,
+      output,
+      durationMs: Date.now() - startedAt,
+      usage: { inputTokens: 0, outputTokens: 0 },
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     failDebugWorker(run, debugID, message)
     await writeDebugRun(runsDir, run)
-    return { key, name: displayName, output: "", durationMs: Date.now() - startedAt, usage: { inputTokens: 0, outputTokens: 0 }, error: message }
+    return {
+      key,
+      name: displayName,
+      output: "",
+      durationMs: Date.now() - startedAt,
+      usage: { inputTokens: 0, outputTokens: 0 },
+      error: message,
+    }
   }
 }
 

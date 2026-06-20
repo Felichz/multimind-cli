@@ -22,8 +22,8 @@
  *   5. Built-in default
  */
 
-import type { LLMProvider, LLMRequest, LLMResponse } from "./provider"
 import { loadConfig } from "../config-store"
+import type { LLMProvider, LLMRequest, LLMResponse } from "./provider"
 
 export type OpenAICompatConfig = {
   baseUrl?: string
@@ -70,7 +70,8 @@ export class OpenAICompatProvider implements LLMProvider {
         baseUrl: (this.explicit.baseUrl ?? envBase ?? file.config.baseUrl).replace(/\/+$/, ""),
         apiKey: this.explicit.apiKey ?? envKey ?? file.config.apiKey,
         model: this.explicit.model ?? envModel ?? file.config.model,
-        timeoutMs: this.explicit.timeoutMs ?? (envTimeout ? Number(envTimeout) : undefined) ?? file.config.timeoutMs,
+        timeoutMs:
+          this.explicit.timeoutMs ?? (envTimeout ? Number(envTimeout) : undefined) ?? file.config.timeoutMs,
       }
     })()
     return this.configPromise

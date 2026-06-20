@@ -27,9 +27,8 @@ export function hasResearchTriggers(insights: WorkerInsight[]): boolean {
 export function extractResearchRequests(insights: WorkerInsight[]): ResearchRequest[] {
   const requests: ResearchRequest[] = []
   for (const insight of insights) {
-    EXECUTE_RESEARCH.lastIndex = 0
-    let match: RegExpExecArray | null
-    while ((match = EXECUTE_RESEARCH.exec(insight.output))) {
+    const matches = insight.output.matchAll(EXECUTE_RESEARCH)
+    for (const match of matches) {
       try {
         const parsed = JSON.parse(match[1]) as { queries?: string[] }
         if (Array.isArray(parsed.queries) && parsed.queries.length) {
@@ -56,7 +55,7 @@ export async function processResearchTriggers(
   for (const request of requests) {
     const researchPrompt = await loadPrompt(coreDir, extDir, "W13_RESEARCHER.md")
     if (!researchPrompt) {
-      results.push(`Research request skipped: W13_RESEARCHER.md not found`)
+      results.push("Research request skipped: W13_RESEARCHER.md not found")
       continue
     }
 
@@ -64,7 +63,10 @@ export async function processResearchTriggers(
       const response = await provider.complete({
         system: researchPrompt,
         messages: [
-          { role: "user", content: `Research query: ${query}\n\nSource worker: ${request.source.key} (${request.source.name})` },
+          {
+            role: "user",
+            content: `Research query: ${query}\n\nSource worker: ${request.source.key} (${request.source.name})`,
+          },
         ],
         model,
       })
@@ -80,10 +82,12 @@ async function loadPrompt(coreDir: string, extDir: string, filename: string): Pr
   if (!(await core.exists())) return undefined
   const ext = Bun.file(path.join(extDir, filename))
   const extText = (await ext.exists()) ? await ext.text() : ""
-  return [
-    (await core.text()).trim(),
-    extText.trim() ? `\n\n--- SYSTEM EXTENSIONS & USER REFINEMENTS ---\n${extText.trim()}` : "",
-  ]
-    .join("")
-    .trim() || undefined
+  return (
+    [
+      (await core.text()).trim(),
+      extText.trim() ? `\n\n--- SYSTEM EXTENSIONS & USER REFINEMENTS ---\n${extText.trim()}` : "",
+    ]
+      .join("")
+      .trim() || undefined
+  )
 }

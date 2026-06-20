@@ -43,7 +43,9 @@ export type JudgeResult = {
   latencyMs: number
 }
 
-const JUDGE_PROMPT = (input: JudgeInput): string => `You are a strict black-box judge for a "Subconscious Heads-Up" produced by a background thinking pipeline.
+const JUDGE_PROMPT = (
+  input: JudgeInput,
+): string => `You are a strict black-box judge for a "Subconscious Heads-Up" produced by a background thinking pipeline.
 
 The heads-up is private, structured context that a downstream LLM (the consumer) will read to produce a user-facing response. It is not a response to the user. Judge it on whether it equips a senior engineer to act, not on whether it is polite, brief, or user-facing.
 
@@ -101,7 +103,7 @@ Expected behavior:
 ${input.expectedQuality}
 
 Must avoid:
-${input.mustAvoid.map((entry) => "- " + entry).join("\n")}
+${input.mustAvoid.map((entry) => `- ${entry}`).join("\n")}
 
 Subconscious heads-up:
 ${input.thinking || "(empty heads-up — pipeline returned no thinking)"}
@@ -117,7 +119,8 @@ export async function judgeThinking(
   const startedAt = Date.now()
   try {
     const response = await provider.complete({
-      system: "You are a strict black-box judge for a main coding agent reaction. Always respond with valid JSON.",
+      system:
+        "You are a strict black-box judge for a main coding agent reaction. Always respond with valid JSON.",
       messages: [{ role: "user", content: JUDGE_PROMPT(input) }],
       ...(model ? { model } : {}),
     })
@@ -135,18 +138,24 @@ export async function judgeThinking(
       valueAdded: 0,
       strengths: [],
       missing: ["judge failed"],
-      rationale: "judge failed: " + (error instanceof Error ? error.message : String(error)),
+      rationale: `judge failed: ${error instanceof Error ? error.message : String(error)}`,
       raw: "",
       latencyMs: Date.now() - startedAt,
     }
   }
 }
 
-function parseJudgeResponse(content: string): { score: number; valueAdded: number; strengths: string[]; missing: string[]; rationale: string } {
+function parseJudgeResponse(content: string): {
+  score: number
+  valueAdded: number
+  strengths: string[]
+  missing: string[]
+  rationale: string
+} {
   const codeFence = String.fromCharCode(96, 96, 96)
   const stripped = content
-    .replace(new RegExp("^" + codeFence + "(?:json)?\\s*", "i"), "")
-    .replace(new RegExp(codeFence + "\\s*$", "i"), "")
+    .replace(new RegExp(`^${codeFence}(?:json)?\\s*`, "i"), "")
+    .replace(new RegExp(`${codeFence}\\s*$`, "i"), "")
     .trim()
   const match = stripped.match(/\{[\s\S]*\}/)
   const text = match ? match[0] : stripped
@@ -160,12 +169,19 @@ function parseJudgeResponse(content: string): { score: number; valueAdded: numbe
     }
     return {
       score: typeof parsed.score === "number" ? Math.max(0, Math.min(100, Math.round(parsed.score))) : 0,
-      valueAdded: typeof parsed.valueAdded === "number" ? Math.max(0, Math.min(5, Math.floor(parsed.valueAdded))) : 0,
+      valueAdded:
+        typeof parsed.valueAdded === "number" ? Math.max(0, Math.min(5, Math.floor(parsed.valueAdded))) : 0,
       strengths: Array.isArray(parsed.strengths) ? parsed.strengths.map(String) : [],
       missing: Array.isArray(parsed.missing) ? parsed.missing.map(String) : [],
       rationale: typeof parsed.rationale === "string" ? parsed.rationale : "no reason given",
     }
   } catch {
-    return { score: 0, valueAdded: 0, strengths: [], missing: ["judge returned non-JSON"], rationale: "judge returned non-JSON: " + text.slice(0, 200) }
+    return {
+      score: 0,
+      valueAdded: 0,
+      strengths: [],
+      missing: ["judge returned non-JSON"],
+      rationale: `judge returned non-JSON: ${text.slice(0, 200)}`,
+    }
   }
 }

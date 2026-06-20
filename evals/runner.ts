@@ -14,13 +14,13 @@
  * is just JSONL on disk. No external orchestration needed.
  */
 
-import { readFile, writeFile, mkdir } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import path from "node:path"
-import { runThinkingPipeline } from "../src/pipeline/run"
 import { OpenAICompatProvider } from "../src/llm/openai-compat"
-import { judgeThinking } from "./scorer"
-import type { ThinkingInput } from "../src/types"
 import type { LLMProvider } from "../src/llm/provider"
+import { runThinkingPipeline } from "../src/pipeline/run"
+import type { ThinkingInput } from "../src/types"
+import { judgeThinking } from "./scorer"
 
 const ROOT = path.join(import.meta.dir, "..")
 const DATASET = path.join(ROOT, "evals", "dataset.jsonl")
@@ -232,12 +232,18 @@ function parseHistory(formatted: string): ThinkingInput["history"] {
     const assistantMatch = line.match(/^\[Assistant\]:\s*(.*)$/)
     if (userMatch) {
       if (current) {
-        messages.push({ info: { id: `m_${counter++}`, role: current.role, time: { created: counter } }, parts: [{ type: "text", text: current.text.join("\n") }] })
+        messages.push({
+          info: { id: `m_${counter++}`, role: current.role, time: { created: counter } },
+          parts: [{ type: "text", text: current.text.join("\n") }],
+        })
       }
       current = { role: "user", text: [userMatch[1]] }
     } else if (assistantMatch) {
       if (current) {
-        messages.push({ info: { id: `m_${counter++}`, role: current.role, time: { created: counter } }, parts: [{ type: "text", text: current.text.join("\n") }] })
+        messages.push({
+          info: { id: `m_${counter++}`, role: current.role, time: { created: counter } },
+          parts: [{ type: "text", text: current.text.join("\n") }],
+        })
       }
       current = { role: "assistant", text: [assistantMatch[1]] }
     } else if (current) {
@@ -245,7 +251,10 @@ function parseHistory(formatted: string): ThinkingInput["history"] {
     }
   }
   if (current) {
-    messages.push({ info: { id: `m_${counter++}`, role: current.role, time: { created: counter } }, parts: [{ type: "text", text: current.text.join("\n") }] })
+    messages.push({
+      info: { id: `m_${counter++}`, role: current.role, time: { created: counter } },
+      parts: [{ type: "text", text: current.text.join("\n") }],
+    })
   }
   return messages
 }
@@ -281,7 +290,9 @@ function printSummary(report: Report) {
   console.error("")
   for (const result of report.results) {
     const status = result.pass ? "✓" : "✗"
-    console.error(`${status} ${result.caseID} score=${result.score} min=${result.minScore} workers=[${result.workersFired.join(",")}]`)
+    console.error(
+      `${status} ${result.caseID} score=${result.score} min=${result.minScore} workers=[${result.workersFired.join(",")}]`,
+    )
     if (!result.pass) console.error(`   reason: ${result.judgeReason}`)
   }
 }

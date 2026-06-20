@@ -7,11 +7,11 @@
  */
 
 import { describe, expect, test } from "bun:test"
-import { runThinkingPipeline } from "../src/pipeline/run"
-import type { LLMProvider, LLMRequest, LLMResponse } from "../src/llm/provider"
-import type { ThinkingInput } from "../src/types"
-import path from "node:path"
 import fs from "node:fs/promises"
+import path from "node:path"
+import type { LLMProvider, LLMRequest, LLMResponse } from "../src/llm/provider"
+import { runThinkingPipeline } from "../src/pipeline/run"
+import type { ThinkingInput } from "../src/types"
 
 const PROMPTS_DIR = path.join(import.meta.dir, "..", "src", "prompts")
 const RUNS_DIR = path.join(import.meta.dir, "..", ".test-runs")
@@ -20,7 +20,10 @@ function makeInput(text: string, response: string): ThinkingInput {
   return {
     history: [
       { info: { id: "u1", role: "user", time: { created: 1 } }, parts: [{ type: "text", text }] },
-      { info: { id: "a1", role: "assistant", time: { created: 2 } }, parts: [{ type: "text", text: response }] },
+      {
+        info: { id: "a1", role: "assistant", time: { created: 2 } },
+        parts: [{ type: "text", text: response }],
+      },
     ],
   }
 }
@@ -48,10 +51,14 @@ function scriptedProvider(scripted: string[]): LLMProvider & { calls: number } {
 describe("pipeline", () => {
   test("skips when disabled in config", async () => {
     const provider = scriptedProvider([])
-    const result = await runThinkingPipeline({ ...makeInput("q", "a"), config: { enabled: false } }, provider, {
-      promptsDir: PROMPTS_DIR,
-      runsDir: RUNS_DIR,
-    })
+    const result = await runThinkingPipeline(
+      { ...makeInput("q", "a"), config: { enabled: false } },
+      provider,
+      {
+        promptsDir: PROMPTS_DIR,
+        runsDir: RUNS_DIR,
+      },
+    )
     expect(result.meta.routerDecision).toBe("SKIP")
     expect(result.meta.notes).toContain("disabled")
   })
@@ -101,8 +108,14 @@ describe("pipeline", () => {
     const result = await runThinkingPipeline(
       {
         history: [
-          { info: { id: "u1", role: "user", time: { created: 1 } }, parts: [{ type: "text", text: "real question" }] },
-          { info: { id: "a1", role: "assistant", time: { created: 2 } }, parts: [{ type: "text", text: "answer" }] },
+          {
+            info: { id: "u1", role: "user", time: { created: 1 } },
+            parts: [{ type: "text", text: "real question" }],
+          },
+          {
+            info: { id: "a1", role: "assistant", time: { created: 2 } },
+            parts: [{ type: "text", text: "answer" }],
+          },
           {
             info: { id: "u2", role: "user", time: { created: 3 } },
             parts: [{ type: "text", text: "previous thinking", metadata: { source: "multimind" } }],
@@ -120,9 +133,18 @@ describe("pipeline", () => {
     const result = await runThinkingPipeline(
       {
         history: [
-          { info: { id: "u1", role: "user", time: { created: 1 } }, parts: [{ type: "text", text: "first" }] },
-          { info: { id: "a1", role: "assistant", time: { created: 2 } }, parts: [{ type: "text", text: "ok" }] },
-          { info: { id: "u2", role: "user", time: { created: 3 } }, parts: [{ type: "text", text: "follow-up" }] },
+          {
+            info: { id: "u1", role: "user", time: { created: 1 } },
+            parts: [{ type: "text", text: "first" }],
+          },
+          {
+            info: { id: "a1", role: "assistant", time: { created: 2 } },
+            parts: [{ type: "text", text: "ok" }],
+          },
+          {
+            info: { id: "u2", role: "user", time: { created: 3 } },
+            parts: [{ type: "text", text: "follow-up" }],
+          },
         ],
       },
       provider,
@@ -137,11 +159,10 @@ describe("pipeline", () => {
       "FROM W4: risk noted",
       "FROM W2: gap noted",
     ])
-    const result = await runThinkingPipeline(
-      { ...makeInput("q", "a"), workers: ["W2", "W4"] },
-      provider,
-      { promptsDir: PROMPTS_DIR, runsDir: RUNS_DIR },
-    )
+    const result = await runThinkingPipeline({ ...makeInput("q", "a"), workers: ["W2", "W4"] }, provider, {
+      promptsDir: PROMPTS_DIR,
+      runsDir: RUNS_DIR,
+    })
     expect(result.meta.routerDecision).toBe("ACTIVATE")
     expect(Object.keys(result.workers).sort()).toEqual(["W2", "W4"])
   })

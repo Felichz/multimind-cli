@@ -10,8 +10,8 @@
  */
 
 import { describe, expect, test } from "bun:test"
-import path from "node:path"
 import fs from "node:fs"
+import path from "node:path"
 
 const ROOT = path.join(import.meta.dir, "..")
 const PROMPTS_DIR = path.join(ROOT, "src", "prompts")
@@ -57,7 +57,8 @@ describe("public API", () => {
     // CLI preserves a clean boundary: the CLI is for thinking, the
     // consumer is for answering.
     const mod = await import("../src/index")
-    expect((mod as any).synthesizeFinalResponse).toBeUndefined()
+    // @ts-expect-error: the test is asserting this property does NOT exist
+    expect(mod.synthesizeFinalResponse).toBeUndefined()
   })
 
   test("the library does NOT export WorkerResult (renamed to WorkerOutput)", async () => {
@@ -67,7 +68,8 @@ describe("public API", () => {
     // (workers.W17) without scanning an array. If a future contributor
     // re-adds WorkerResult, this test catches the regression.
     const mod = await import("../src/index")
-    expect((mod as any).WorkerResult).toBeUndefined()
+    // @ts-expect-error: the test is asserting this property does NOT exist
+    expect(mod.WorkerResult).toBeUndefined()
   })
 
   test("OpenAICompatProvider is constructible and satisfies LLMProvider", async () => {
@@ -112,7 +114,9 @@ describe("prompts", () => {
       "W17_SECURITY_CHECK",
     ]
     for (const key of expectedKeys) {
-      const file = fs.readdirSync(PROMPTS_DIR).find((f) => f.startsWith(`${key}`) || f.startsWith(`${key}.md`))
+      const file = fs
+        .readdirSync(PROMPTS_DIR)
+        .find((f) => f.startsWith(`${key}`) || f.startsWith(`${key}.md`))
       expect(file, `expected prompt for ${key}`).toBeDefined()
     }
   })

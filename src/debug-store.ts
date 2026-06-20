@@ -132,7 +132,10 @@ export function startDebugWorker(
     ...(input.tools?.length ? { tools: input.tools } : {}),
   }
   run.workers.push(worker)
-  addDebugEvent(run, "worker.start", `${input.key} ${input.name}`, { title: input.title, sessionID: input.sessionID })
+  addDebugEvent(run, "worker.start", `${input.key} ${input.name}`, {
+    title: input.title,
+    sessionID: input.sessionID,
+  })
   return worker.id
 }
 

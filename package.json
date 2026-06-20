@@ -16,10 +16,15 @@
   "scripts": {
     "test": "bun test",
     "typecheck": "tsc --noEmit",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "ci": "bun run typecheck && bun run lint && bun run test",
     "evals": "bun run evals/runner.ts"
   },
+  "license": "MIT",
   "devDependencies": {
+    "@biomejs/biome": "^1.9.0",
     "@types/bun": "latest",
-    "typescript": "^5.0.0"
+    "typescript": "^5.5.0"
   }
 }
