@@ -19,30 +19,12 @@ You can use it three ways: as a CLI (`multimind think < conversation.json`), as 
 
 | Metric | Value |
 |---|---:|
-| Cases run | **52 / 52** (100% of the dataset) |
 | Pass rate | **43 / 52 (82.7%)** |
 | Mean | **81.2** |
 | Median | **91** |
 | Wall time | ~3.5 hours |
 
-**Per-case results** (the full table — see [Status](#status) for the failure analysis):
-
-```
-Pass (43): REACT-001 96  REACT-002 91  REACT-003 90  REACT-004 88  REACT-005 97
-         REACT-006 91  REACT-008 91  REACT-009 90  REACT-010 94  REACT-011 94
-         REACT-012 90  REACT-014 90  REACT-015 90  REACT-016 84  REACT-017 88
-         REACT-018 96  REACT-019 90  REACT-020 94  REACT-021 91  REACT-022 90
-         REACT-023 92  REACT-024 97  REACT-025 92  REACT-026 88  REACT-027 96
-         REACT-028 94  REACT-030 90  REACT-032 93  REACT-033 96  REACT-034 93
-         REACT-035 94  REACT-036 90  REACT-038 89  REACT-039 88  REACT-040 92
-         REACT-041 91  REACT-042 93  REACT-043 97  REACT-044 87  REACT-046 92
-         REACT-048 98  HO-001 94     HO-002 91
-Fail (9): REACT-007 0 (skip)   REACT-013 0 (judge)   REACT-029 0 (judge)
-       REACT-031 0 (skip)   REACT-037 68 (1 worker)  REACT-045 0 (skip)
-       REACT-047 58 (1 worker)  HO-003 76 (1 worker)  REACT-049 68 (1 worker)
-```
-
-**The 4 real thinking failures (REACT-037, REACT-047, HO-003, REACT-049) all had exactly 1 worker fired.** The W0 router under-fired on cases that needed a coordinated multi-worker set. The remaining 5 failures are infra (judge non-JSON or pipeline SKIP), not thinking failures. See [Status](#status) for the breakdown.
+The 9 failures split into 3 categories: 4 real thinking failures (single-worker cases that needed multi-lens coverage), 3 pipeline SKIPs, 2 judge non-JSON outputs. The full per-case table and the failure analysis are in [Status](#status); the raw eval report is in [`evals/reports/latest.md`](evals/reports/latest.md).
 
 ---
 
@@ -429,8 +411,9 @@ multimind-cli/
 │       └── cli-input.json
 ├── evals/
 │   ├── dataset.jsonl            # 52 reaction-eval cases
-│   └── runner.ts                # eval driver
-└── .test-runs/                  # per-test run records (gitignored)
+│   ├── runner.ts                # eval driver
+│   └── reports/
+│       └── latest.md            # latest full run: per-case table + failure analysis
 ```
 
 ---
@@ -481,23 +464,22 @@ To add a new LLM provider:
 
 | Metric | Value |
 |---|---:|
-| Cases run | **52 / 52** |
-| Pass rate | **43 / 52 (82.7%)** |
+| Cases | **52 / 52** |
+| Pass | **43 / 52 (82.7%)** |
 | Mean | **81.2** |
 | Median | **91** |
-| Wall time | ~3.5 hours |
 
-**9 failures, classified:**
+**Failures, by root cause:**
 
 | Type | Count | Cases |
 |---|---:|---|
-| **Real thinking failure** (score 58–76, single worker fired) | 4 | REACT-037, REACT-047, HO-003, REACT-049 |
-| **Pipeline SKIP** (W0 router returned SKIP) | 3 | REACT-007, REACT-031, REACT-045 |
+| **Thinking** (single-worker, scored 58–76) | 4 | REACT-037, REACT-047, HO-003, REACT-049 |
+| **Pipeline SKIP** (W0 returned SKIP) | 3 | REACT-007, REACT-031, REACT-045 |
 | **Judge non-JSON** (parse failed) | 2 | REACT-013, REACT-029 |
 
-**The 4 real thinking failures all had exactly 1 worker fired** — the W0 router under-fired on cases that need a coordinated multi-worker set. The single worker (W3, W1, W2, W6 respectively) was strong on its own dimension but missed the others the case required. The pattern is consistent: W0 needs better routing cues for cases where multiple lenses are required.
+The 4 thinking failures all had **exactly 1 worker fired**. The W0 router under-fires on cases that need a coordinated multi-worker set — the single worker is strong on its own dimension but misses the others. The fix is in the W0 router prompt.
 
-The 5 infra failures (skip + judge) are noise — not thinking-quality regressions. Run `bun run bin/multimind.ts eval --case <ID>` to reproduce any case.
+Full per-case table, judge reasoning, and the failure analysis are in [`evals/reports/latest.md`](evals/reports/latest.md). Run `bun run bin/multimind.ts eval --case <ID>` to reproduce any case.
 
 **What is intentionally not built:**
 

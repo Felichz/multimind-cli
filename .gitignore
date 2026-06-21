@@ -21,7 +21,14 @@ build/
 .test-runs/
 .multimind/
 evals/runs/
-evals/reports/
+
+# Per-run report files written by the eval runner (auto-generated).
+# We ship the canonical `latest.md` (manual summary) and `.gitkeep`
+# (so the directory exists). The re-include below must come after
+# the matching pattern above.
+evals/reports/*
+!evals/reports/.gitkeep
+!evals/reports/latest.md
 
 # Runtime artifacts: the evolution engine writes per-run session data
 # (debug-store, synthetic tests, empirical contract files) to a hidden
