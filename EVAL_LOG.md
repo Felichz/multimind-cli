@@ -19,6 +19,106 @@ The format is deliberately narrative, not tabular. Tables belong in the eval rep
 
 ---
 
+## Pre-eval foundation — architectural decisions the eval depends on
+
+This is not an eval run. It is the work that preceded the evals and shaped the system the evals are measuring. If you read only the eval entries, you will see numbers but not the *why* behind the system that produced them.
+
+The eval log starts here because the architectural decisions are what the eval scores measure. Without them, the eval is just a number. With them, it is a test of a specific thesis: that a small model with a structured harness can do professional-grade thinking at low cost.
+
+### 1. The CLI was extracted from the opencode plugin
+
+The pipeline started as an opencode plugin (`multimind_dev/.opencode/plugins/subconscious-server.ts`) that ran automatically in the background of the main agent. That coupling made sense when the system was a single integration. It did not make sense when the same thinking was useful to:
+
+- A Codex skill
+- A Claude Code skill
+- Any other agent that can capture a conversation and inject a response
+
+The CLI extraction decoupled the thinking from any specific host. The CLI is now a pure input → output tool: it takes a conversation, returns a heads-up, makes no decisions about what the consumer does with it.
+
+### 2. The output shape was split into `headsUp` / `workers` / `meta`
+
+The original output was a single `thinking: string` field — the consolidated heads-up only. That forced every consumer to either parse the heads-up or accept it whole.
+
+The new shape exposes the components separately:
+
+- `headsUp` — the consolidated thinking, ready to inject as LLM context
+- `workers` — each worker's raw output, keyed by worker key (`W2`, `W4`, `W17`, ...). A consumer can surface specific findings (`workers.W17` is the security check) without parsing.
+- `meta` — pipeline metadata: router decision, C0 verdict, timing, run record path. Most consumers ignore this; the eval runner uses it.
+
+The split is part of the contract. The contract test `the library does NOT export WorkerResult (renamed to WorkerOutput)` defends it — if a future contributor re-adds the array shape, the test fails.
+
+### 3. Synthesis was removed from the CLI
+
+The original pipeline had a `synthesizeFinalResponse` function: take the heads-up, call the LLM again, produce a user-facing message. That step is now the consumer's job.
+
+The reasoning: synthesis is host-specific. The CLI does not know whether the consumer is opencode, Codex, a Slack bot, or a CLI test. Each host has its own prompt template, its own tone, its own constraints. Forcing the CLI to synthesize would mean the CLI's choice of synthesis is a constraint the consumer must work around.
+
+The contract test `the library does NOT export synthesizeFinalResponse` is the second line of defense after `AGENTS.md` — if anyone re-adds the function, the test fails and the contributor has to defend the change.
+
+### 4. The "Subconscious" framing was dropped for "multimind"
+
+The original name was "subconscious" because the pipeline ran in the background of the main agent — it was the agent's subconscious. The CLI is a standalone tool, not a background layer. The "subconscious" concept was tied to the opencode integration; once the CLI was extracted, the metaphor no longer fit.
+
+The rebrand touched:
+
+- The output marker: `[Subconscious Heads-Up]` → `[Heads-Up]`
+- The C0 decision markers: `[subconscious:safe_to_end]` → `[multimind:safe_to_end]`
+- The type name: `SubconsciousConfig` → `MultimindConfig`
+- Worker prompts that referenced "the Subconscious system" → "the multimind pipeline"
+- Judge prompt and TSDoc
+
+The rebrand exposed a real bug: `debug-store.ts` was writing run records to `{runsDir}/.opencode/subconscious/debug/...` while the consumer-facing `runRecordPath(runsDir, run)` returned `{runsDir}/{id}.json` — two different paths. The record written by the pipeline was not the one returned in `meta.runRecordPath`. Fixed in the same commit. The "subconscious" paths were a symptom of the brand confusion; the rebrand forced the cleanup.
+
+### 5. Race condition in the LLM provider
+
+`OpenAICompatProvider` was a real bug, not a polish issue. The constructor set `this.baseUrl`, `this.apiKey`, etc. from env vars / defaults synchronously, then fired an async `loadConfig()` to override from the file. If a consumer called `complete()` before the microtask flushed, the file values were lost.
+
+The CLI worked by accident because `runThinkingPipeline` is itself async, so the microtask queue drained before the first `complete()`. A library consumer that constructed and immediately called `complete()` would have raced.
+
+Fix: drop the eager defaults. The provider holds the explicit constructor config in a field and resolves the full config (env + file + defaults) lazily, once, in `complete()`. The resolved config is cached, so concurrent calls share the same resolution. The race is structurally impossible.
+
+### 6. The test suite grew from 24 to 95, with contract tests defending the boundary
+
+Before the eval work, the test suite was 24 smoke tests. It grew to 95 tests across 9 files:
+
+- `tests/pipeline.test.ts` — 7 tests, the orchestrator
+- `tests/contract.test.ts` — 13 tests, package shape + boundary defense
+- `tests/dataset.test.ts` — 4 tests, eval dataset well-formedness
+- `tests/provider.test.ts` — 8 tests, OpenAICompatProvider with mocked fetch
+- `tests/consolidator.test.ts` — 16 tests, the 5 consolidator exports
+- `tests/scorer.test.ts` — 13 tests, judge prompt and parseJudgeResponse
+- `tests/engines.test.ts` — 24 tests, research + evolution engines (the last gap closed)
+- `tests/cli.test.ts` — 10 tests, the bin/multimind.ts entry as a subprocess
+- `tests/helpers.ts` — shared mockFetch + chatCompletionResponse
+
+The contract tests are the load-bearing ones. Two of them assert that things the CLI deliberately does NOT do remain absent:
+
+- `the library does NOT export synthesizeFinalResponse`
+- `the library does NOT export WorkerResult (renamed to WorkerOutput)`
+
+A third asserts that worker file names are unique (`no duplicate worker files`). All three would fail if a future contributor re-introduces what the boundary deliberately excludes.
+
+The growth from 24 to 95 was not feature-driven. It was coverage-driven: each missing file (`engines`, `consolidator`, `scorer`, `provider`, `CLI`) had zero tests, and zero tests on a critical-path module is a smell.
+
+### 7. CI is local, not on GitHub Actions
+
+This project does not use GitHub Actions. The `bun run ci` script runs typecheck + lint + tests in one command, locally. The trade-off:
+
+- Pro: no external CI dependency, no secrets to manage, no GitHub-side complexity
+- Con: a tech lead reviewing the repo cannot click a badge to confirm CI passes. The README has no `[![CI passing]]` badge.
+
+For a personal project that is not in active collaboration, this is the right trade-off. If the project goes open-source with multiple contributors, GitHub Actions becomes worth the complexity. The decision is reversible.
+
+### How this connects to the eval
+
+The eval measures a system that exists because of these decisions. The pass rate of 82.7% is a pass rate for *this specific system*: a CLI that returns thinking only, with the output split for consumer ergonomics, judged by a calibrated rubric on a 52-case dataset. Change any of the seven decisions above and the same eval suite would give a different number.
+
+The cost/value claim — M3 + pipeline at 82.7% pass for ~$1–2 per full run — depends on all seven. Remove the output shape split, and the consumer has to do work the CLI could do. Remove the contract tests, and a future contributor re-adds synthesis and the consumer's job gets harder. Remove the rebrand, and a tech lead reads the README and thinks "what is this 'subconscious' thing?" and closes the tab.
+
+The eval is one input. The architectural work is the substrate. The log captures both because the next person to read this needs both to know what to do next.
+
+---
+
 ## 2026-06-20 — Full 52-case surface sweep
 
 ### Run
