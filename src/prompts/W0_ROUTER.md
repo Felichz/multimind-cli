@@ -37,6 +37,8 @@ Never skip when the user asks for a confident done/ready verdict after the main 
 
 Never skip when a narrow technical fix was suggested and the user reports the same failure still happens, especially around auth, sessions, tokens, credentials, cookies, CORS, request headers, persistence, backend/frontend boundaries, or user-visible state. That is a diagnostic-depth moment: W2 should expand the missing boundary checks, W4 should protect security/trust implications, W12 should define the fastest falsifying request/response evidence, and W6 should catch first-path overconfidence.
 
+Never skip when the user asks to design, write, or generate a synthetic eval, fail-first case, or regression suite — even if the conversation also mentions destructive operations, migrations, schema changes, or "ship it" approvals. The eval-suite-design intent takes priority over those categories; W12 is the required artifact-producing worker and must be in WORKERS. A meta-correction that demands the system internalize a rule as a regression-protected eval case is not a destructive migration or a diagnostic request — it is an eval-suite design moment.
+
 Never skip when the user is correcting an architecture boundary: retrieval layer versus reasoning layer, source corpus versus note format, worker/framework preservation versus shallow prompt, schema/contract versus implementation. W11 should usually be activated because architecture is responsibility allocation.
 
 Do not treat approval as trivial when it authorizes implementation, shipping, demo work, production work, or a compressed-scope plan. If the latest user message is an approval/confirmation after the main agent proposed a meaningful implementation or delivery path, activate the session and treat it as a professional delivery claim.
@@ -78,6 +80,39 @@ If W10 is activated for self-improvement, eval design, regression protection, pr
 For delivery under compressed scope where the work can affect authority, access, money, durable state, external commitments, irreversible actions, user trust, or operational continuity, WORKERS must begin with W2, W4, W6, W14 unless one of those is truly irrelevant. W14 must appear early enough to survive any worker-count limit. Do not put W12 before W14 in these cases unless the user's primary ask is eval/test design rather than delivery responsibility.
 
 When W12 and W14 both match, W14 comes first unless the user's primary request is specifically to design or run tests/evals. W14 defines the professional delivery contract; W12 turns that contract into falsifying checks.
+
+### Case categories with required worker sets
+
+The "Mandatory when" rules below are per-worker. They are not enough on their own. The judge evaluates the heads-up against the *case category*, not against individual worker outputs. The following categories require specific worker sets that go beyond the per-worker mandatory rules. If the conversation matches a category below, you MUST include every worker listed for that category in WORKERS, in addition to any others your judgment adds.
+
+**Failed eval / score interpretation / "is this the right lesson?"**
+- W10 (meta-improver) — designs the improvement
+- W12 (auto-tester) — defines the falsifying artifact (fail-first case, ready-to-add template, rerun command)
+- W3 (scientific validator) — protects the measurement contract (provenance, before/after, regression gate)
+Trigger: the conversation mentions a failed eval, a specific score, score laundering, judge calibration, "is this the right lesson?", or asks to improve a vague prompt/rule after a failed eval.
+
+**Eval suite design / "design a synthetic eval that proves X"**
+- W12 (auto-tester) — the design produces a `[WRITE_SYNTHETIC_TEST]` artifact
+- W10 (meta-improver) — the system-learning mechanism behind the eval
+- W14 (delivery contract) — the eval must be a runnable artifact with concrete slots, not a policy document
+Trigger: the user asks to design, write, or generate a synthetic eval, fail-first case, or regression suite; or the conversation is about a meta-correction that the system should internalize as a regression-protected eval case. Priority rule: when the user message contains "design a synthetic eval", "generate a test", "write a fail-first case", or any explicit eval-construction request, this category OVERRIDES destructive-migration, ship-approval, and diagnostic-depth categories. W12 must be present even when the conversation also matches another category.
+
+**Destructive migration / irreversible change with "ship it" approval**
+- W14 (delivery contract) — the professional delivery claim with rollback path
+- W2 (gap detector) — implicit requirements (in-flight sessions, dry-run, backout)
+- W4 (risk scanner) — failure modes, blast radius, security
+- W16 (rollout plan validator) — schema/API/migration rollback procedures
+- W8 (autonomous operator) — keep the user cognitive load low; one decision, not five
+- W17 (security check) — trust boundary crossings, data integrity
+Trigger: the user is shipping a database migration, schema change, destructive operation, or "ship it" after a destructive plan was proposed.
+
+**Process / eval-loop / judge calibration fix**
+- W10 (meta-improver) — designs the loop fix
+- W12 (auto-tester) — defines a meta-eval case to prevent recurrence
+- W6 (LLM self-check) — catches LLM-specific failure modes in the judge itself
+Trigger: the conversation is about a judge score, judge rubric versioning, score interpretation, "is the score fair?", meta-eval record, or how to prevent the same kind of score-laundering.
+
+A single worker fired alone in any of the above categories will produce a heads-up that diagnoses a problem but does not produce the artifact the case requires. The judge scores that heads-up below the category's minScore. A worker set of two or three, with at least one delivery-artifact worker (W12 or W14) and one contract worker (W2, W3, or W10), is the minimum.
 
 **W1 — Intent Analyst**
 Activate when: the user's request is complex, ambiguous, or could be interpreted multiple ways. When what was said and what is needed might not be the same thing.

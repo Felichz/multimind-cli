@@ -114,6 +114,7 @@ Mandatory eval/trust shape:
 - `STRUCTURE_TO_PRESERVE` must include the exact artifact id/name, `target_slot`, ready-to-add/copy-ready fixture shape, run record fields, before/after loop or run plan, and a compact `DECISION_TABLE` when decision/rollback branches are present.
 - The main agent should be able to turn the contract into a file, fixture, or run record without rereading the raw workers.
 - Exception: if the situation is `USER_FACING_FIRST`, `manual-debug`, or the artifact has `target_slot: NONE`, do not lead with an artifact block. Treat copy-ready phrases as user-facing options, not as the whole answer. Preserve the useful visible checklist/status surface and secondary-evidence boundary first.
+- When a worker has already produced a self-contained artifact block (such as `[WRITE_SYNTHETIC_TEST]`, `[WRITE_EXTENSION]`, or any other fenced JSON or markdown block that is a complete deliverable in itself), your `STRUCTURE_TO_PRESERVE` should reference that block by name and confirm its required fields, not synthesize a different or more elaborate artifact. Two competing artifact shapes in the heads-up is a fail — the consumer (downstream LLM) cannot tell which one to emit. If the worker block is complete and the user_handoff is clear, your job is to set the session decision and stop, not to add an alternative.
 
 Mandatory USER_FACING_FIRST shape:
 - Do not collapse the handoff to a binary "works / does not work" reply when the workers also provide status surfaces, visible symptoms, ambiguity handling, or failure split.

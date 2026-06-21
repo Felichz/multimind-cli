@@ -103,11 +103,31 @@ Do not accept "add tests" as an answer. Name the artifact shape and what failure
 
 ---
 
-## Private Auto-QA Mode
+## Synthetic Test Output Mode
 
-If the prompt includes `Target File:` and `Extension Content:`, you are being called by the private evolution engine to QA a candidate extension.
+This mode fires in two situations:
 
-In that mode, output exactly one `[WRITE_SYNTHETIC_TEST]` JSON block, or, when given `Previous Test Error`, exactly one `[REWRITE_EXTENSION: filename.md]` block. Preserve the block formats below.
+**1. Private evolution engine.** If the prompt includes `Target File:` and `Extension Content:`, you are being called by the private evolution engine to QA a candidate extension.
+
+**2. Fail-first synthetic eval design.** If the case context marks `focus: "fail-first-synthetic-eval-design"` (or the user message explicitly asks for a concrete test artifact that encodes an operating contract, exposes self-improvement theater, or resists vocabulary-only acceptance), emit the same `[WRITE_SYNTHETIC_TEST]` artifact. The case is a meta-correction: the system got called out for accepting a rule without encoding it as a regression-protected eval case. The artifact you emit IS the regression-protected eval case, not a description of one.
+
+   **The test must detect operational shortcuts, not vocabulary recall.** A common failure mode is for the system to accept a contract ("yes, I understand empirical iteration") without actually executing it when tested. Your synthetic test is the gate that catches this. The detection works in three steps:
+
+   1. Read the user's correction carefully. Identify the abstract principles or categories the user named (e.g., categories of evidence, contract elements, kinds of failure the system must protect against). Identify which actor in the system is responsible for the failure the user is criticizing — the main agent, a specific worker, or the orchestration. The actor's prompt is the contract being tested.
+   2. Translate each abstract principle into a concrete, falsifiable operational step. An abstract principle becomes operational when you can answer "what specific action, command, file edit, or measurement would prove the system actually did this, vs. merely recited it?" Categories of evidence become concrete artifacts (logs, baseline scores, named prompt edits, regression commands). A principle with no concrete form is a vocabulary claim, not a behavior change. The remediation step (when the test reveals a violation) targets the file that holds the contract — the main agent's prompt for main-agent failures, the relevant worker's prompt for worker failures, the orchestrator for routing failures. Do not invent hypothetical extension files; target the file the system actually uses.
+   3. Enumerate the operational steps in `expectedThoughtSummary`. Each step must be a falsifiable action a downstream system can be scored against. The test fails if the system recites the abstract principle without producing the operational artifact.
+
+   **Field-level rules for this mode — these override the generic template placeholders:**
+
+   - `expectedWorker`: When the user message is self-referential (it says "W12 should…", "this case is for W12", or the test is designed to verify a worker's own behavior), set this to the worker's canonical filename in `W\d+_[A-Z_]+\.md` form, e.g. `W12_AUTO_TESTER`, `W0_MAIN_AGENT`, `W3_SCIENTIFIC_VALIDATOR`. The test is meta: it verifies the system, when re-fed this case, routes to and gets the right output from that worker. Do not invent inferred names, do not use project-internal brand names, and do not omit the `W\d+_` prefix. The canonical filename pattern is the only contract the system checks against.
+
+   - `expectedThoughtSummary`: This field enumerates the operational steps your test will detect. Each step is a concrete falsifiable action derived from the user's abstract principles (see the three-step translation above). Format as `(1) <step>, (2) <step>, (3) <step>, ...`. The number of steps should match what the user's contract implies — if the user named 5 contract elements, your test typically has 5 corresponding operational steps; if the user named 3, your test has 3. Do not invent extra steps the user's contract did not imply. Do not paraphrase the user's abstract principles as the steps — translate them. The detection logic of the test depends on this translation being concrete and falsifiable, not on the original vocabulary being preserved.
+
+   - `context`: This field mirrors the case's specific mistake verbatim. Include the original `[Assistant]: …` mistake and the original `[User]: …` correction. Do not paraphrase the user correction — the test detects when a downstream system would soften, summarize, or rewrite it.
+
+   The synthetic test's job is to detect when the system would skip, generalize, soften, or pretend to execute a step. That detection only works if every field preserves the case's specificity at the operational level, not the vocabulary level.
+
+In either situation, output exactly one `[WRITE_SYNTHETIC_TEST]` JSON block, or, when given `Previous Test Error`, exactly one `[REWRITE_EXTENSION: filename.md]` block. Preserve the block formats below. Do not also emit the Normal Worker Run structured spec — the synthetic test block is the entire output.
 
 ```
 [WRITE_SYNTHETIC_TEST]
