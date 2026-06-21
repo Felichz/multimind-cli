@@ -70,6 +70,26 @@ describe("parseJudgeResponse", () => {
     expect(parsed.score).toBe(84)
   })
 
+  test("does not capture unrelated { ... } from inside a [WRITE_SYNTHETIC_TEST] block", () => {
+    // The judge sometimes echoes the W12 [WRITE_SYNTHETIC_TEST] block (which
+    // contains its own { "id": ..., "context": ..., "expectedWorker": ... } JSON)
+    // in the rationale field. The old greedy regex /\{[\s\S]*\}/ would match
+    // from the judge's opening { all the way to the closing } of the embedded
+    // JSON, producing unparseable text and scoring 0. The balanced-brace walker
+    // should stop at the first matched } and return a valid JSON object.
+    const noisy = `{
+  "score": 88,
+  "pass": true,
+  "valueAdded": 0,
+  "strengths": ["[WRITE_SYNTHETIC_TEST] block is properly formatted with all required fields (id, context, expectedWorker)"],
+  "missing": [],
+  "rationale": "The artifact includes \\"{\\\\\\"id\\\\\\": \\\\\\"AUTO-GEN-4271\\\\\\", \\\\\\"context\\\\\\": \\\\\\"[Assistant]: ...\\\\\\"}\\" which the system should treat as a literal artifact."
+}`
+    const parsed = parseJudgeResponse(noisy)
+    expect(parsed.score).toBe(88)
+    expect(parsed.rationale).toContain("AUTO-GEN-4271")
+  })
+
   test("clamps score to 0-100", () => {
     const high = parseJudgeResponse(JSON.stringify({ score: 150 }))
     expect(high.score).toBe(100)

@@ -160,8 +160,11 @@ export function parseJudgeResponse(content: string): {
     .replace(new RegExp(`^${codeFence}(?:json)?\\s*`, "i"), "")
     .replace(new RegExp(`${codeFence}\\s*$`, "i"), "")
     .trim()
-  const match = stripped.match(/\{[\s\S]*\}/)
-  const text = match ? match[0] : stripped
+  // Find the first balanced JSON object. The greedy regex /\{[\s\S]*\}/
+  // matches from the first { to the last }, which can capture unrelated
+  // content (e.g., a [WRITE_SYNTHETIC_TEST] block with its own { inside)
+  // and produce unparseable text. Walking brace depth avoids that.
+  const text = firstBalancedJson(stripped) ?? stripped
   try {
     const parsed = JSON.parse(text) as {
       score?: number
@@ -187,4 +190,44 @@ export function parseJudgeResponse(content: string): {
       rationale: `judge returned non-JSON: ${text.slice(0, 200)}`,
     }
   }
+}
+
+/**
+ * Find the first balanced `{...}` JSON object in `text`. Returns the
+ * substring or null if no balanced object exists. Walks character by
+ * character, tracking brace depth. Strings (`"..."`) are skipped so a
+ * `{` or `}` inside a string value does not change depth.
+ */
+function firstBalancedJson(text: string): string | null {
+  let start = -1
+  let depth = 0
+  let inString = false
+  let escape = false
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i]
+    if (escape) {
+      escape = false
+      continue
+    }
+    if (inString) {
+      if (ch === "\\") escape = true
+      else if (ch === '"') inString = false
+      continue
+    }
+    if (ch === '"') {
+      inString = true
+      continue
+    }
+    if (ch === "{") {
+      if (start === -1) start = i
+      depth++
+    } else if (ch === "}") {
+      depth--
+      if (depth === 0 && start !== -1) {
+        return text.slice(start, i + 1)
+      }
+      if (depth < 0) return null
+    }
+  }
+  return null
 }
