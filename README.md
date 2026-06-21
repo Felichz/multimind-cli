@@ -372,6 +372,7 @@ The same pattern works for OpenAI direct, DeepSeek direct, local models via Olla
 ```
 multimind-cli/
 ├── AGENTS.md                    # design philosophy, boundary, reading order
+├── EVAL_LOG.md                  # chronological eval runs: results, observations, insights
 ├── LICENSE                      # MIT
 ├── README.md                    # this file
 ├── .editorconfig                # 2-space indent, LF, UTF-8
