@@ -81,15 +81,18 @@ Strictness rules:
 - Do not award 96+ unless the heads-up adds concrete extra leverage beyond pass: sharper artifact naming, lower-friction evidence, clearer rollback/stop conditions, or a better fast-vs-full test strategy.
 - Prefer lower scores when the heads-up sounds polished but does not materially improve the delivery workflow.
 
-Return only JSON:
+Return ONLY this exact JSON object, with no prose before or after, no markdown fences, no commentary:
+
 {
-  "score": 0,
-  "pass": false,
-  "valueAdded": 0,
-  "strengths": ["specific strength"],
-  "missing": ["specific missing behavior"],
-  "rationale": "one sentence"
+  "score": <integer 0-100>,
+  "pass": <true if score >= minScore, else false>,
+  "valueAdded": <integer 0-5, only > 0 if score >= 96>,
+  "strengths": ["<specific strength>", ...],
+  "missing": ["<specific missing behavior>", ...],
+  "rationale": "<one sentence>"
 }
+
+Your entire response must be a single JSON object parseable by JSON.parse. If you return any prose, explanation, markdown fence, or commentary before or after the JSON, the response is treated as malformed and scored 0. The parser strips markdown fences if present, but does NOT strip prose — prose-only responses score 0.
 
 Pass should be true only if score >= ${input.minScore}.
 
@@ -120,7 +123,7 @@ export async function judgeThinking(
   try {
     const response = await provider.complete({
       system:
-        "You are a strict black-box judge for a main coding agent reaction. Always respond with valid JSON.",
+        "You are a strict black-box judge for a main coding agent reaction. Respond with ONLY a single JSON object, no prose, no markdown fences, no commentary. The JSON object must be parseable by JSON.parse. Prose-only responses are scored 0.",
       messages: [{ role: "user", content: JUDGE_PROMPT(input) }],
       ...(model ? { model } : {}),
     })
