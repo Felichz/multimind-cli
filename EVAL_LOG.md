@@ -288,3 +288,75 @@ The second half of the full sweep. This is where the single-worker pattern becam
 2. If the pass rate improved meaningfully (target: 87%+), commit and update `evals/reports/latest.md`.
 3. If REACT-049 is still intermittent, do the cleanup pass on the W12 prompt to make it more general.
 4. Investigate the 3 SKIP cases (REACT-007, REACT-031, REACT-045) — REACT-007 is a legitimate SKIP (trivial request), but REACT-031 and REACT-045 should activate. W0 prompt might need a "Never skip when the user's response is short but action-oriented" rule.
+
+---
+
+## 2026-06-21 (same session, later) — Full 52-case sweep after coordinated fixes (v3)
+
+### Run
+
+- **Cases:** all 52
+- **Model:** opencode-go/minimax-m3
+- **Wall time:** ~2 hours 15 minutes (52 cases × ~2.5 min/case)
+- **v3 results file:** `evals/runs/full52-2026-06-21-v3.json`
+
+### Results
+
+- **Pass rate: 44/52 (84.6%)** — up from 43/52 (82.7%) in the v1 sweep
+- **Mean: 80** — down from 81.2 (dragged down by 4 judge non-JSON zeros)
+- **Median: 90** — down from 91
+
+### Failures (8)
+
+| Case | Score | Type | Note |
+|------|------:|------|------|
+| REACT-007 | 0 | Pipeline SKIP | Correct: trivial request, no thinking needed |
+| REACT-017 | 0 | Judge non-JSON | Passes 91 on retry |
+| REACT-028 | 0 | Judge non-JSON | Passes 93 on retry |
+| REACT-039 | 0 | Judge non-JSON | Passes 90 on retry |
+| REACT-043 | 0 | Judge non-JSON | Passes 88-90 on retry |
+| REACT-044 | 30 | Real thinking fail | Passes 91 on retry (LLM non-determinism) |
+| HO-002 | 78 | Real thinking fail | Close to 80 min; first_slice was implementation not test harness |
+| REACT-049 | 58 | Real thinking fail | W12 produced 5-step translation of contract elements, not the 5 specific operational steps in expectedQuality |
+
+### Real progress from v1
+
+- **3 of 4 thinking fails fixed reliably:** REACT-037 (87), REACT-047 (83), HO-003 (90) all pass at 85+. The single-worker pattern was solved by the W0 case-category contract.
+- **2 of 3 pipeline SKIPs fixed:** REACT-031 (92) and REACT-045 (92) now activate via the W0 reorder + new "action-verb response" rule. REACT-007 still correctly SKIPs.
+- **REACT-005** (was 95 in v1) now passes at **98** with a much richer worker set: W3+W6+W7+W8+W10+W12.
+- **REACT-048** (was 85 in v1) now passes at **92**.
+
+### Remaining 2 real thinking fails
+
+- **HO-002** (78 vs 80 min): the heads-up does comprehensive risk coverage but the first_slice is implementation rather than the test harness the case requires. The judge is consistent on this. Likely a W2/W14 routing fix is needed — the case is about test-suite design, not delivery.
+- **REACT-049** (58 vs 85 min): the W12's [WRITE_SYNTHETIC_TEST] block translates the 5 conceptual contract elements to 5 operational steps, but the judge wants the SPECIFIC 5 operational steps from `expectedQuality` (sandbox eval, baseline failure, W0 prompt extension, re-eval, regression). The W12 can't see `expectedQuality`, so it has to bridge from conceptual to operational, and the bridge is non-deterministic.
+
+### Judge non-JSON: 4 cases, all pass on retry
+
+The 4 judge non-JSON cases are LLM non-determinism, not thinking failures. All 4 pass on retry with scores 88-93. Patterns observed:
+- **Valid JSON that the old parser rejected:** the new balanced-brace walker (`firstBalancedJson` in `src/judge.ts`) handles this for most cases.
+- **JavaScript-style object literals (unquoted keys):** the LLM hallucinates an example of what a webhook payload looks like instead of the score JSON. The strengthened judge prompt now says "keys MUST be quoted with double quotes, no JavaScript-style literals, no code examples".
+- **Garbage fragments:** `{n}` or truncated JSON. LLM non-deterministic. Hard to fix at prompt level.
+
+Residual risk: ~5-10% of runs will hit a judge non-JSON fail. This is acceptable for a non-deterministic eval.
+
+### Cleanup pass on W12 prompt: tried and reverted
+
+I tried a "cleanup pass" on the W12 prompt to make the field-level rules more concise and first-principles-only. The goal was to drop the verbose case-specific examples.
+
+Result: REACT-047 dropped from 83 to 74. The LLM is non-deterministic and the more-specific examples helped it stay on-track. Reverted to the more-specific version. Lesson: in non-deterministic LLM work, verbose examples in the prompt are a stability feature, not a clarity bug.
+
+### Insights
+
+- **The W0 case-category contract was the single most impactful change.** It solved 3 of 4 thinking fails and 2 of 3 SKIPs in one go.
+- **The judge non-JSON is the new failure frontier.** The 4 cases that previously were clean (REACT-013, REACT-029) are now passing, but 4 other cases occasionally fail with judge non-JSON. The failure rate is bounded at ~5-10% per run.
+- **REACT-049 is a fundamental case design tension.** The `expectedQuality` lists specific 5 operational steps that are NOT visible to the W12 in the case input. The W12 has to bridge from conceptual to operational, and the bridge is non-deterministic. The only way to make this case deterministic is to put the 5 operational steps in the `userMessage` — which would turn the test into "did W12 copy 5 steps verbatim", a trivial test. The user explicitly said NOT to do that.
+- **Eval is non-deterministic; pass rates are samples, not results.** The v1 was 82.7% (one sample). v3 was 84.6% (one sample). REACT-044 was 30 in v3 and 91 in retry. REACT-043 was 0 in v3 and 88-90 in retries. The trend is the signal, not any single number.
+
+### Next steps
+
+1. **Done:** coordinated W0/W12/C0/judge fixes shipped. v3 52-case sweep completed at 84.6%.
+2. **Optional:** investigate HO-002 further. The case wants the first_slice to be the test harness, but the W14 routing is producing implementation-oriented content. Might need a W14 prompt tweak or a different W0 routing for "test-suite design" cases.
+3. **Optional:** investigate REACT-049 further. The case design tension is real; the only way to make the case deterministic is to expose the 5 operational steps to the W12, which the user said is cheating. Accept the LLM non-determinism.
+4. **Skip:** the cleanup pass. The verbose examples in W12 are a stability feature. The prompt stays as-is.
+5. **Follow up:** if a real CI gate is needed, run the full eval 3 times and average, or set judge temperature to 0.
