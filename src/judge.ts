@@ -81,7 +81,7 @@ Strictness rules:
 - Do not award 96+ unless the heads-up adds concrete extra leverage beyond pass: sharper artifact naming, lower-friction evidence, clearer rollback/stop conditions, or a better fast-vs-full test strategy.
 - Prefer lower scores when the heads-up sounds polished but does not materially improve the delivery workflow.
 
-Return ONLY this exact JSON object, with no prose before or after, no markdown fences, no commentary:
+Return ONLY this exact JSON object, with no prose before or after, no markdown fences, no commentary, no examples, no other content:
 
 {
   "score": <integer 0-100>,
@@ -92,7 +92,7 @@ Return ONLY this exact JSON object, with no prose before or after, no markdown f
   "rationale": "<one sentence>"
 }
 
-Your entire response must be a single JSON object parseable by JSON.parse. If you return any prose, explanation, markdown fence, or commentary before or after the JSON, the response is treated as malformed and scored 0. The parser strips markdown fences if present, but does NOT strip prose — prose-only responses score 0.
+Your entire response must be a single JSON object parseable by JSON.parse. Keys MUST be quoted with double quotes. String values MUST be quoted with double quotes. Do NOT use JavaScript-style object literals (unquoted keys). Do NOT include code examples, payload shapes, or any other content from the heads-up in your response — only the score JSON. If you return any prose, explanation, markdown fence, code, or content from the heads-up before, inside, or after the JSON, the response is treated as malformed and scored 0.
 
 Pass should be true only if score >= ${input.minScore}.
 
