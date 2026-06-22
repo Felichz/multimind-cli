@@ -119,6 +119,45 @@ describe("consolidateSynthesizerForMainAgent", () => {
     })
     expect(out).toContain("whitespace fallback")
   })
+
+  test("strips private <think>...</think> from C0 and worker outputs in the heads-up", () => {
+    // The consolidator embeds C0's synthesis and each worker's full output
+    // into the heads-up at multiple points. The worker's LLM chain-of-thought
+    // (the <think> block) is private reasoning the consumer main agent does
+    // not need; the substantive response after the think block is the
+    // public deliverable. The full output, including the <think>, is still
+    // available at `result.workers[key].output` for debugging, audit, and
+    // future eval design. This test pins that the consolidator does NOT
+    // leak the private reasoning into the heads-up.
+    const out = consolidateSynthesizerForMainAgent({
+      synthesis:
+        "<think>\nprivate C0 reasoning — not for the heads-up\n</think>\n\n[Multimind Completion Contract]\n\nfirst_slice: build it",
+      insights: [
+        insight("W2", "Gap", "<think>\nprivate worker reasoning — not for the heads-up\n</think>\n\nthe only finding"),
+      ],
+    })
+    expect(out).not.toContain("<think>")
+    expect(out).not.toContain("private reasoning")
+    expect(out).toContain("first_slice: build it")
+    expect(out).toContain("the only finding")
+  })
+
+  test("handles multiple <think> blocks and <think> without closing tag gracefully", () => {
+    // Multiple think blocks in one output (e.g., C0 with a retry), and a
+    // malformed output that has <think> but no </think> (the model
+    // truncated). The strip should remove the well-formed blocks and
+    // leave the malformed one for visibility rather than silently
+    // dropping the substantive response after it.
+    const out = consolidateSynthesizerForMainAgent({
+      synthesis: "<think>first C0 thought</think>\n\n[Multimind Completion Contract]\n\nfirst_slice: a\n<think>second C0 thought</think>",
+      insights: [insight("W2", "Gap", "<think>private\nno closing tag\n\nthe only finding")],
+    })
+    expect(out).not.toContain("first C0 thought")
+    expect(out).not.toContain("second C0 thought")
+    // Malformed <think> without closing tag is preserved (not silently
+    // dropped) so the heads-up still surfaces the substantive response.
+    expect(out).toContain("the only finding")
+  })
 })
 
 describe("buildSynthesizerPrompt", () => {
