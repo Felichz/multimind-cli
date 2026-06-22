@@ -87,7 +87,7 @@ For delivery under compressed scope where the work can affect authority, access,
 
 When W12 and W14 both match, W14 comes first unless the user's primary request is specifically to design or run tests/evals. W14 defines the professional delivery contract; W12 turns that contract into falsifying checks.
 
-### Case categories with required worker sets
+**Multi-category cases are union, not intersection.** When the conversation matches more than one category below (e.g., a meta-correction that is both "Failed eval / score interpretation" and "Eval suite design", or a casual-approval-after-process-skipping that is both "Delivery under compressed scope" and "Process / eval-loop / judge calibration"), include the union of all required workers in WORKERS, not the intersection. The case is the union — the user is asking the system to do all of those things at once. Dropping a required worker because another category also matched is the most common routing failure on multi-category cases. When the union produces more workers than fit the budget, prefer the per-category order (delivery > eval/test > contract > risk > self-check) but never drop a category's required load-bearing worker (W12 for synthetic eval design, W14 for delivery, W2+W4+W6 for security/risk, W10 for self-improvement, W3 for measurement).
 
 The "Mandatory when" rules below are per-worker. They are not enough on their own. The judge evaluates the heads-up against the *case category*, not against individual worker outputs. The following categories require specific worker sets that go beyond the per-worker mandatory rules. If the conversation matches a category below, you MUST include every worker listed for that category in WORKERS, in addition to any others your judgment adds.
 
