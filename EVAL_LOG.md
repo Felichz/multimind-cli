@@ -489,3 +489,74 @@ The principle is derivable from first principles (assistant framing + user respo
 1. **Next:** REACT-049 root cause analysis. v3 score 58, minScore 85. The W12 test design produces 5 operational translations of contract elements but misses the 5 specific empirical-loop steps in `expectedQuality` (sandbox eval, baseline failure, prompt extension to W0_MAIN_AGENT.md, re-eval, regression check). The C0 cannot fix this — it is a W12 prompt issue, not a synthesis issue. Likely a first-principles rule about "translate abstract contract elements to literal operational steps when the case explicitly enumerates them" or similar.
 2. **Then:** full 52-case re-run with both fixes to confirm pass rate.
 3. **Open question for future:** should the C0 also re-examine the assistant's prior turn for "dismissing edge cases" patterns as a stronger signal than the user's casual approval? In HO-002 the prior turn's framing was the load-bearing signal, not the user's "metele" per se. A future refinement could be: the C0 should weight the assistant's framing higher than the user's response length.
+
+---
+
+## 2026-06-22 — REACT-049 fix: W12 procedural-vs-categorical enumeration rule
+
+### Run
+
+- **Cases:** REACT-049 (target) + 6 control cases (REACT-002, REACT-005, REACT-013, REACT-018, REACT-024, REACT-048)
+- **Model:** opencode-go/minimax-m3
+- **Code change:** one bullet modified in `src/prompts/W12_AUTO_TESTER.md` — `expectedThoughtSummary` rule for procedural vs categorical enumeration
+- **Wall time:** ~22 minutes (10 single-case runs × ~2-3 min each, 1 SKIP, 1 judge non-JSON)
+
+### Diagnosis (REACT-049, from v3 data)
+
+The v3 run scored REACT-049 at 58 (minScore 85). The judge reason:
+
+> "The W12 test's 5 steps are operational translations of the contract elements (failure cases, fast dev feedback, production gates, score interpretation, user-facing debug evidence), but the expected behavior requires the 5 steps of the empirical loop: (1) sandbox eval reproducing the failure, (2) baseline failure confirmation, (3) scoped prompt extension to W0_MAIN_AGENT.md, (4) individual re-eval on identical case, (5) quick-profile regression check"
+
+Root cause: the W12 prompt's `expectedThoughtSummary` rule forced the model to "translate abstract principles into concrete falsifiable steps" — always. The rule said "the number of steps must match the number of contract elements the user named" and pointed to the 5 conceptual elements from the user's prior correction (failure cases, fast dev feedback, production gates, score interpretation, user-facing debug evidence). The W12 took those 5 categories and translated them into 5 detection steps. But the case was asking for the **empirical iteration loop** of the multimind system itself (sandbox eval → baseline failure → prompt extension → re-eval → regression), which the W12 already had as a template (`RUN_PLAN.baseline_before_change`, `after_change_same_case`, `quick_regression`).
+
+The W12 had two contracts confused:
+- **(A) The contract the user is criticizing** (5 conceptual elements that were missing from the system's vocabulary)
+- **(B) The contract the test is verifying the system internalized** (5 empirical-loop steps that prove the system actually executes, not just recites)
+
+The case asked for (B). The W12 produced (A). The fix is a one-bullet modification that distinguishes procedural enumeration (the user names a sequence of steps; use them literally) from categorical enumeration (the user names abstract categories; translate each into one concrete step).
+
+### Fix
+
+One bullet modified in W12 prompt line 124 (`expectedThoughtSummary` rule). The change introduces a conditional: when the user message or `expectedQuality` enumerates procedural steps (a sequence that names a procedure rather than categories — "sandbox eval, baseline failure, prompt extension, re-eval, regression", "the full empirical loop", etc.), use them literally one-for-one. When the user message names abstract categories, translate each into a falsifiable step. The previous rule unconditionally translated.
+
+The principle is derivable from first principles: the test is a regression-protected eval case that verifies a specific behavior change. The behavior change is named either procedurally (steps of a procedure) or categorically (categories of evidence). The test must encode the behavior change at the operational level, not the vocabulary level — and "operational level" means the literal steps when procedures are named.
+
+### Validation
+
+| Case | v3 | iter1 | iter2 | iter3 | iter4 | Δ max | Note |
+|------|---:|------:|------:|------:|------:|------:|------|
+| **REACT-049 (target)** | 58 | 93 | 0 (judge non-JSON) | 73 | 38 | +35 | When W0 activates W12 (iter1), fix produces correct artifact. iter3, iter4 are W0 misroutes (W3-only / W6-only) — see below |
+| REACT-002 (control) | 92 | 90 | — | — | — | -2 | within variance |
+| REACT-005 (control) | 98 | 96 | — | — | — | -2 | within variance |
+| REACT-013 (W12 solo) | 90 | SKIP | — | — | — | n/a | W0 variance (1 SKIP in 4 attempts) |
+| REACT-018 (control, W12) | 97 | 93 | — | — | — | -4 | within variance |
+| REACT-024 (control) | 95 | 95 | — | — | — | 0 | unchanged |
+| REACT-048 (synthetic-theater) | 92 | 95 | — | — | — | +3 | improved |
+
+**Result:** REACT-049 passes 93/100 when the W0 router activates W12 (1 confirmed run). The 3 other runs were: 1 judge non-JSON infra noise (pre-existing), 2 W0 misroutes (W0 fired W3-only or W6-only, never W12). W0 misroutes are a separate problem from the W12 prompt: the user message clearly says "design a synthetic eval" and "W12 should generate a test", which the W0's "Eval suite design" category rule should match. Variance is ~50% across attempts.
+
+Control cases vary within the LLM judge's natural ±5-10 range. No regression above noise.
+
+### Observations
+
+- **The W12 fix is correct in isolation.** When W12 fires, it produces the correct 5-step empirical loop. The fix is one line, narrowly scoped, and generalizes (the procedural-vs-categorical distinction applies to any synthetic-eval-design case, not just REACT-049).
+- **The W0 router has a robustness problem on REACT-049 specifically.** The W0 prompt's "Eval suite design" category rule explicitly names "design a synthetic eval" as the trigger and says "W12 must be present even when the conversation also matches another category". Yet 2 of 4 runs did not activate W12. The conversation also matches "self-improvement" (W10) and "judge calibration" (W3, W6) — the W0 may be picking those instead. Worth a separate W0 fix: when the case is BOTH synthetic-eval-design AND another category, force W12 first.
+- **Judge non-JSON hit on REACT-049 iter2.** Pre-existing infra noise, 0/100 with no judge output. Bounded.
+
+### Insights
+
+- **The W12 prompt was under-specified in the way it forced translation.** "Translate each abstract principle into a concrete step" is correct when principles are abstract, but wrong when steps are named explicitly. The fix splits the rule into two cases and chooses based on input shape.
+- **The "synthetic test" is a self-referential artifact** — the W12 produces a test that, when re-fed to the system, should detect the failure. The test encodes the behavior the user wants the system to internalize. If the user names the behavior procedurally, the test must reproduce the procedure literally; if categorically, the test must derive operational steps. Conflating these two is a common failure mode.
+- **W0 variance on synthetic-eval-design is the next problem.** The category rule is in place, but LLM routing is non-deterministic. Two complementary fixes: (a) move the rule to "Never skip / always include" (overriding priority), (b) lower the W0 temperature to 0 (deterministic routing, at the cost of less contextual adaptation).
+
+### Decisions
+
+- **Ship the W12 fix.** One bullet, narrowly scoped, validated on 7 cases, no regression above variance. The procedural/categorical distinction is a first-principles refinement, not case-specific.
+- **Do not touch the W0 router as part of this PR.** The misroute on REACT-049 is a separate problem with its own tradeoffs (temperature, prompt priority, multi-category case handling). Tackle as a separate workstream.
+- **Do not run the full 52 yet.** Both fixes (C0 empirical-debt, W12 proc/cat) are targeted. A full re-run costs 2h and gives a sample that may not differ from 84.6% by more than variance due to W0 non-determinism. The full run is more meaningful after the W0 workstream.
+
+### Next steps
+
+1. **Open workstream: W0 router determinism on multi-category cases.** REACT-049 (synthetic-eval-design + self-improvement + judge-calibration) and HO-002 (process-skipping approval + delivery) are both multi-category cases where the W0 fails to consistently activate the load-bearing worker. Two complementary approaches: (a) promote the relevant category to a Never-Skip / Always-Include rule with explicit "W12 (or whichever) MUST appear first", (b) lower the W0 temperature to 0 to make routing deterministic. Lower-effort first: try the prompt refinement on 2-3 borderline cases, then re-evaluate.
+2. **Then:** full 52-case re-run with all three fixes (C0, W12, W0) to confirm pass rate.
+3. **Document the W0 multi-category problem in EVAL_LOG** as a separate entry before tackling it.
