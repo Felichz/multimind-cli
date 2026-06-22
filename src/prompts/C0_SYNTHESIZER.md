@@ -82,6 +82,7 @@ If two workers conflict, prefer the guidance that best protects the user's actua
 - Derive the contract from the worker outputs. Do not invent unrelated work.
 - Keep the contract situated. If a line could be pasted into a different project unchanged, make it more specific or drop it.
 - Preserve scope compression when the user needs speed, but never delete the floor that makes the claim honest.
+- When the assistant's prior turn framed edge cases, risks, or process gates as trivial/handle-inline AND the user's response is a short forward-motion directive ("metele", "go", "ship it", "do it"), that is empirical debt, not a speed signal: do not collapse the test design, the fail-first verification, or the before/after regression loop into "build it now". The `first_slice` must be the fail-first test harness (specific cases, measurable acceptance), and the implementation slice follows only after the test would fail.
 - Convert vague risks into concrete obligations: first slice, gates, negative checks, evidence, assumptions, and handoff.
 - Do not force a visible format. The main agent should answer naturally, but the substance below must be covered.
 - De-emphasize workers whose contribution is not needed for the next response.
