@@ -560,3 +560,47 @@ Control cases vary within the LLM judge's natural ±5-10 range. No regression ab
 1. **Open workstream: W0 router determinism on multi-category cases.** REACT-049 (synthetic-eval-design + self-improvement + judge-calibration) and HO-002 (process-skipping approval + delivery) are both multi-category cases where the W0 fails to consistently activate the load-bearing worker. Two complementary approaches: (a) promote the relevant category to a Never-Skip / Always-Include rule with explicit "W12 (or whichever) MUST appear first", (b) lower the W0 temperature to 0 to make routing deterministic. Lower-effort first: try the prompt refinement on 2-3 borderline cases, then re-evaluate.
 2. **Then:** full 52-case re-run with all three fixes (C0, W12, W0) to confirm pass rate.
 3. **Document the W0 multi-category problem in EVAL_LOG** as a separate entry before tackling it.
+
+---
+
+## 2026-06-22 (Fase 2) — Variance analysis: v3, v4, v5, v6 full 52-case sweeps
+
+### Runs
+
+| Run | Code state | Wall time | Pass | Rate | SKIPs | non-JSON | real fails |
+|-----|-----------|-----------|------|------|-------|----------|------------|
+| **v3** | original prompts | ~2h 15m | 44/52 | 84.6% | 1 | 4 | 3 (HO-002 78, REACT-044 30, REACT-049 58) |
+| v4 | + W0 union fix | ~1h 50m | 41/52 | 78.8% | 7 | 4 | 0 |
+| v5 | + C0 + W12 fixes (no W0) | ~1h 50m | 38/52 | 73.1% | 4 | 7 | 3 (REACT-037 78, HO-001 77, REACT-049 78) |
+| v6 | v5 + C0 tightened | ~1h 50m | 41/52 | 78.8% | 5 | 2 | 4 (REACT-014 55, REACT-044 84, REACT-047 79, REACT-049 68) |
+
+### Findings
+
+**1. Variance dominates pass rate at this scale.** Three runs (v3, v4, v5, v6) of nearly-identical code state produced pass rates from 73% to 85% — a ±6% spread on the same fix combinations. The LLM-as-judge + LLM-as-router combination has a structural noise floor of ~10% per 52-case run. Single-case validation is therefore not predictive of full-run pass rate. Every fix must be validated with a full 52-case sweep before merge.
+
+**2. Local fixes are locally correct but globally invisible.**
+- HO-002: 78 → 91-96 across v5/v6 (C0 fix works)
+- REACT-044: 30 → 87 in v5 (variance win)
+- REACT-049: 58 → 68-78 across v5/v6 (W12 fix only helps when W12 fires; the W0 doesn't always fire it)
+
+The fixes that worked in single-case validation (HO-002 78→90, REACT-049 58→93) did improve the target cases, but the global pass rate is dominated by ~10% LLM variance, so the "improvement" is hidden in the noise.
+
+**3. The C0 fix increased judge non-JSON rate.** v3 had 4 non-JSON; v5 had 7. The added bullet in the C0 prompt made the synthesis more structured, which in some cases produced longer outputs the judge couldn't parse as JSON. v6 (with the tightened bullet) reduced non-JSON back to 2, but increased SKIPs and real fails. Net trade-off: not clearly positive.
+
+**4. The W0 fix was net negative.** v4 (with the multi-category union rule) had 7 SKIPs (vs 1 in v3) and 0 real fails. The W0 fix correctly enforced union but caused the W0 to skip borderline cases it would otherwise activate. Reverted.
+
+**5. REACT-049 is the hardest case.** Across v3, v4, v5, v6, REACT-049 scored 58, 53, 78, 68 — never passing cleanly. The case requires: W12 to fire (gating 1) + W12 to produce the correct 5-step empirical loop (gating 2). The W12 fix solves gating 2 when W12 fires. The W0 fix was meant to solve gating 1 but introduced too many false SKIPs. A surgical W0 fix that forces W12 to fire on `focus: "fail-first-synthetic-eval-design"` is the next move.
+
+### Decisions
+
+- **Revert the C0 tightening (kept v5 state for the C0 fix).** The tightening reduced non-JSON but increased SKIPs and real fails. Net: not worth the trade-off.
+- **Revert the W0 fix (already done in `e38e425`).** v4 confirmed the W0 union rule caused more SKIPs than real routing wins.
+- **Keep the C0 fix (`350d4a0`) and the W12 fix (`8e63114`) committed.** Both are correct in their target cases. They do not improve the global pass rate, but they do fix the specific cases they were designed to fix.
+- **Do not chase the v3 84.6% baseline further with prompt fixes alone.** The variance is structural. The next move to push pass rate above 85% is either (a) lower the LLM temperature to reduce LLM-as-router and LLM-as-judge variance, or (b) accept 80-85% as the natural ceiling for this configuration and focus on fixing the remaining real fails (REACT-014 55, REACT-047 79, HO-001 77, REACT-049 68) one at a time with single-case targeted fixes, validating each with a full 52-case sweep.
+
+### Next steps (if continuing this workstream)
+
+1. **Temperature experiment.** Set the LLM temperature to 0 for the router and judge, run a full 52-case sweep. Compare against v3. If variance drops and pass rate stabilizes, the variance diagnosis is confirmed and the fix is one config change.
+2. **REACT-049 surgical W0 fix.** A small targeted change to the W0 prompt that says "when the case focus is `fail-first-synthetic-eval-design` and the user message contains 'design a synthetic eval' or 'W12 should generate', W12 must be in WORKERS" — explicit, narrow, no "union" framing that the LLM can misinterpret. Validate with full sweep before merge.
+3. **REACT-014, REACT-047 root cause analysis.** Both are real thinking fails across runs. Diagnose one at a time, fix, validate with full sweep.
+4. **Stop prompt-fixing the natural variance.** If the temperature=0 experiment doesn't move the needle, the system is at its ceiling for this configuration. Move on to other improvements (more cases, harder cases, model upgrade, etc.).
