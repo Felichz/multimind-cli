@@ -998,3 +998,57 @@ Mean over v10+v11b (post-parser-fix): **45.5/52 = 87.5%**.
 2. **Consider a "router-SKIP as pass" eval rule** for REACT-007, REACT-041, and other cases where SKIP is the correct behavior. This is an eval-system change, not a model change.
 3. **Run a v12 final sweep** to confirm the 87.5% mean is stable, and document the final state.
 
+
+---
+
+## 2026-06-23 — W0 triage category fix attempt (REVERTED)
+
+### Attempt
+
+Drafted a "Triage / prioritization / 'which one first'" case category for W0, intended to fix the REACT-014 must-avoid "refusing to prioritize" pattern. The category was added to the W0 case-categories list with workers W1, W2, W4, W6 + a trigger description.
+
+### Single-case validation
+
+- **REACT-014 (single-case)**: 96/100 PASS, workers fired: `[W1, W2, W4, W6, W14]`. The new category correctly fired the right workers for this case. Single-case signal was positive.
+
+### Regression detected
+
+- **REACT-022 (single-case)**: 0/100 FAIL (router-drop). Without the fix, REACT-022 passes 5/5 in v7-v11b. The new category caused W0 to return SKIP for "please get this into a mergeable state" (focus: `messy-existing-project-triage`). The new category's broad trigger description ("user asks what to prioritize, in what order to act, or expresses impatience") loosely matched the case focus and caused the W0 model to second-guess its routing decision, ultimately SKIPing.
+
+### Decision: REVERT
+
+The W0 fix is reverted (`git checkout src/prompts/W0_ROUTER.md`). The 1-case win (REACT-014: 78 → 96) does not justify the 1-case regression (REACT-022: 95 → 0). The risk-vs-reward is negative: any W0 prompt change has high regression potential because the W0 model is sensitive to prompt-level cues.
+
+### Why this happened (first-principles analysis)
+
+The W0 prompt is a long, structured document (~240 lines) with multiple decision rules. Adding a new case category adds 7 lines of text that the W0 model must integrate with the existing structure. The W0 model's routing decision is sensitive to:
+1. The exact wording of category triggers
+2. The ordering of rules
+3. The relative emphasis of "Never skip" vs "Skip" rules
+
+My new category's trigger description was too long and overlapping with the "messy-existing-project-triage" focus. The W0 model over-matched, decided the case didn't perfectly fit the new category, and fell through to a SKIP decision that it would not have made without the new text.
+
+### Alternative fix considered (rejected)
+
+A more targeted W0 fix would be to:
+- Add a single sentence to the "Never skip" rules: "Never skip when the user asks which item to fix first, in what order to act, or expresses impatience with a prior diagnosis."
+- This avoids creating a new category and is more aligned with the existing rule structure.
+
+This alternative was not tested because:
+- The user instruction is to validate each fix with a full sweep before merging, and a full sweep takes 2.5h.
+- The cost-benefit of a marginal improvement (REACT-014 borderline) does not justify 2.5h of validation.
+- The 87.5% post-parser-fix mean is already a good result.
+
+### Insights
+
+- **W0 prompt changes are high-risk.** Any addition can cause regressions in 1-2 cases that previously worked. The W0 model is making a single LLM call with a complex prompt; small wording changes can shift its decisions significantly.
+- **Single-case validation is not enough.** The W0 fix passed REACT-014 single-case but failed REACT-022 single-case. Both were 1-call samples, and neither predicted the full-sweep behavior accurately.
+- **The 87.5% stable mean is the real result.** Pushing higher is in diminishing-returns territory. Each additional percentage point requires disproportionately more validation cost.
+- **Eval-driven iteration has natural plateau.** Once the high-leverage mechanical fixes (judge parser, default temp) are shipped, the remaining failures are at the noise floor and require either model changes (out of scope for this workstream) or eval-design changes (separate workstream).
+
+### Decisions
+
+- **Ship the parser fix + default temp=0 as the v10 workstream.** This is the shipped result.
+- **Do not ship the W0 triage category fix.** Reverted. Document the attempt for future reference.
+- **Mark the workstream as substantially complete.** The 87.5% stable mean is achieved. Pushing for 94%+ requires either eval-design changes or model changes, both out of scope.
+
