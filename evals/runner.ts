@@ -49,6 +49,7 @@ type CaseResult = {
   workerOutputs: Record<string, string>
   judgeReason: string
   judgeMissing: string[]
+  judgeRaw: string
   pipelineMs: number
   judgeMs: number
   totalMs: number
@@ -175,6 +176,7 @@ async function runCase(testCase: Case, provider: LLMProvider, skipJudge: boolean
       workerOutputs: {},
       judgeReason: "pipeline error",
       judgeMissing: [],
+      judgeRaw: "",
       pipelineMs: 0,
       judgeMs: 0,
       totalMs: Date.now() - startedAt,
@@ -191,6 +193,8 @@ async function runCase(testCase: Case, provider: LLMProvider, skipJudge: boolean
   let score = pipelineResult.headsUp ? (pipelineResult.headsUp.length > 50 ? 80 : 30) : 0
   let judgeReason = skipJudge ? "judge skipped" : "(no judge)"
   let judgeMissing: string[] = []
+  let judgeRaw = ""
+  let judgeMs = 0
 
   if (!skipJudge && pipelineResult.headsUp) {
     const judgeResult = await judgeThinking(provider, {
@@ -205,6 +209,10 @@ async function runCase(testCase: Case, provider: LLMProvider, skipJudge: boolean
     score = judgeResult.score
     judgeReason = judgeResult.rationale
     judgeMissing = judgeResult.missing
+    judgeRaw = judgeResult.raw
+    judgeMs = judgeResult.latencyMs
+  } else {
+    judgeRaw = ""
   }
 
   const workersFired = Object.keys(pipelineResult.workers)
@@ -222,8 +230,9 @@ async function runCase(testCase: Case, provider: LLMProvider, skipJudge: boolean
     workerOutputs,
     judgeReason,
     judgeMissing,
+    judgeRaw,
     pipelineMs,
-    judgeMs: 0,
+    judgeMs,
     totalMs: Date.now() - startedAt,
     thinking: pipelineResult.headsUp,
   }

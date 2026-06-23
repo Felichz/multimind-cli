@@ -159,6 +159,7 @@ export function parseJudgeResponse(content: string): {
   const stripped = content
     .replace(new RegExp(`^${codeFence}(?:json)?\\s*`, "i"), "")
     .replace(new RegExp(`${codeFence}\\s*$`, "i"), "")
+    .replace(/<think>[\s\S]*?<\/think>/g, "")
     .trim()
   // Find the first balanced JSON object. The greedy regex /\{[\s\S]*\}/
   // matches from the first { to the last }, which can capture unrelated
@@ -182,6 +183,24 @@ export function parseJudgeResponse(content: string): {
       rationale: typeof parsed.rationale === "string" ? parsed.rationale : "no reason given",
     }
   } catch {
+    // The model sometimes emits a structurally invalid object
+    // (e.g., a stray array sibling of "strengths"). When JSON.parse
+    // fails, fall back to regex extraction of the two fields that
+    // determine the pass/fail verdict: "score" and "pass". This is
+    // the highest-leverage recovery path for non-JSON responses.
+    const scoreMatch = stripped.match(/"score"\s*:\s*(-?\d+)/)
+    const passMatch = stripped.match(/"pass"\s*:\s*(true|false)/)
+    if (scoreMatch) {
+      const score = Math.max(0, Math.min(100, Math.round(Number(scoreMatch[1]))))
+      const pass = passMatch ? passMatch[1] === "true" : score >= 80
+      return {
+        score,
+        valueAdded: 0,
+        strengths: [],
+        missing: ["judge returned malformed JSON; recovered via regex"],
+        rationale: `judge returned malformed JSON; recovered score=${score}, pass=${pass} via regex: ${text.slice(0, 200)}`,
+      }
+    }
     return {
       score: 0,
       valueAdded: 0,
