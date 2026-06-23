@@ -77,13 +77,18 @@ async function main() {
   console.error(`Loaded ${cases.length} cases from ${path.relative(ROOT, DATASET)}`)
 
   let provider: LLMProvider = new OpenAICompatProvider()
-  if (args.temperature !== undefined) {
+  // Default to temperature=0 for stable aggregate pass rate (see EVAL_LOG v7/v8
+  // stability analysis). Pass --temperature <N> to override. Pass
+  // --temperature 1 (or any non-zero) to restore legacy non-deterministic
+  // behavior. Setting it to a number forces that value; omitting the flag
+  // falls back to the default of 0.
+  const effectiveTemp = args.temperature ?? 0
+  {
     const baseProvider = provider
-    const baseTemp = args.temperature
     provider = {
-      name: `${baseProvider.name}@temp=${baseTemp}`,
+      name: `${baseProvider.name}@temp=${effectiveTemp}`,
       complete: (req, signal) =>
-        baseProvider.complete({ ...req, temperature: baseTemp }, signal),
+        baseProvider.complete({ ...req, temperature: effectiveTemp }, signal),
     }
   }
   console.error(`Provider: ${provider.name}`)
