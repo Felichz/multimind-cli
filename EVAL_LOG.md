@@ -604,3 +604,65 @@ The fixes that worked in single-case validation (HO-002 78→90, REACT-049 58→
 2. **REACT-049 surgical W0 fix.** A small targeted change to the W0 prompt that says "when the case focus is `fail-first-synthetic-eval-design` and the user message contains 'design a synthetic eval' or 'W12 should generate', W12 must be in WORKERS" — explicit, narrow, no "union" framing that the LLM can misinterpret. Validate with full sweep before merge.
 3. **REACT-014, REACT-047 root cause analysis.** Both are real thinking fails across runs. Diagnose one at a time, fix, validate with full sweep.
 4. **Stop prompt-fixing the natural variance.** If the temperature=0 experiment doesn't move the needle, the system is at its ceiling for this configuration. Move on to other improvements (more cases, harder cases, model upgrade, etc.).
+
+---
+
+## 2026-06-22 (Fase 2 cont.) — Temperature=0 experiment (v7)
+
+### Hypothesis
+
+LLM-as-judge + LLM-as-router variance dominates pass rate. Setting temperature=0 at the client level should reduce variance. If pass rate stabilizes at ~85% (v3 level) with temp=0, the variance hypothesis is confirmed and the next move is to make temp=0 the default. If pass rate is similar to v5/v6, the variance is server-side (M3 model ignores client temperature) and the next move is server-side retry logic or model change.
+
+### Run
+
+- **Code state:** v5 baseline (C0 + W12 fixes, no W0 fix, no tightening) + `--temperature 0` flag in runner
+- **Wall time:** ~1h 50m
+- **Output:** `evals/runs/full52-2026-06-22-v7-temp0.json`
+
+### Result
+
+- **v7: 43/52 (82.7%)**, mean 77, median 90
+- **Real thinking fails: 1** (REACT-030, score 75, minScore 85, W1 only)
+- **SKIPs: 5**, **non-JSON: 3**
+
+### Comparison
+
+| Run | Pass | Real fails | SKIPs | non-JSON | Note |
+|-----|------|------------|-------|----------|------|
+| v3 | 44/52 (84.6%) | 3 | 1 | 4 | baseline |
+| v5 | 38/52 (73.1%) | 3 | 4 | 7 | C0+W12 only |
+| v6 | 41/52 (78.8%) | 4 | 5 | 2 | v5 + C0 tightening |
+| **v7** | **43/52 (82.7%)** | **1** | **5** | **3** | **v5 + temp=0** |
+
+### Findings
+
+**1. temp=0 reduces real thinking fails from 3-4 to 1.** REACT-030 75 is the only real fail in v7. v3 had REACT-044 30, HO-002 78, REACT-049 58 (3 real fails). v7 has only REACT-030 75. The variance in real thinking content is reduced by temperature=0.
+
+**2. temp=0 helps the previously-failing cases substantially:**
+- REACT-044: 30 → 88 (+58) — passed
+- REACT-049: 58 → 88 (+30) — passed
+- HO-002: 78 → 87 (+9) — passed
+- REACT-017, REACT-028, REACT-039, REACT-043: all 0 → 90+ (judge non-JSON retries now succeed)
+
+**3. temp=0 did NOT reduce SKIPs (1 → 5) or non-JSON (4 → 3).** The router SKIP rate and judge non-JSON rate are bounded by server-side variance, not client-side temperature. The M3 model via opencode-go provider has a structural noise floor that temp=0 does not eliminate.
+
+**4. v7 is 1 case below v3 (43 vs 44).** The single regression is REACT-030 (75, real fail with W1 only). This is a borderline case where the W0 under-fires; the fix would be a W0 prompt addition for architecture-comparison cases. Trade-off: not worth fixing for 1 case.
+
+### Insights
+
+- **The variance has two components:** (a) client-side LLM sampling variance (reduced by temp=0), and (b) server-side M3 model variance (NOT reduced by temp=0). The 1 real fail in v7 is the residual (b); SKIPs/non-JSON are also (b).
+- **Single-case validation is now confirmed useless** as a predictor of full-run pass rate. v7 ran 4 different HO-002 scores across single-case tests (90, 95, 84, 92, 94, 87). Each was just a sample of the underlying distribution.
+- **temp=0 is a real improvement** for the content-quality dimension. It should be the default for production runs where determinism matters.
+
+### Decisions
+
+- **Keep the `--temperature` flag in the runner.** It is a useful experiment surface even if v7 itself doesn't ship as a config change.
+- **Do NOT change the default temperature** without further analysis. The 1-case gap to v3 (43 vs 44) is within variance; one more run could go either way. The trade-off (more determinism in content quality, no change in SKIP/non-JSON rate) is positive but not transformative.
+- **Document the variance source as two-component** in EVAL_LOG. Future workers on this system should know that client-side temperature controls content variance but not routing/judge variance.
+
+### Next steps
+
+1. **Run v7 a second time** to confirm 43/52 is stable (not lucky). If stable, the temp=0 default is justified. If not, the variance hypothesis is not fully confirmed.
+2. **Investigate REACT-030** as a real fail that survived temp=0. W0 fired only W1 (intent analyst) — a W0 routing issue specific to architecture-comparison cases. Diagnose single-case, fix, validate.
+3. **Consider server-side retry** for SKIP and non-JSON cases. The judge is a LLM call; if it returns non-JSON, a retry with the same temperature often succeeds. The runner could auto-retry once before giving up. This would turn infra noise from 5-7 cases per run into 0-1.
+4. **Consider provider change.** The M3 model via opencode-go has a structural noise floor (judge non-JSON, router SKIP) that is below the noise floor of other opencode models. A provider change is the only way to eliminate the floor.

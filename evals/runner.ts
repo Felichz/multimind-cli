@@ -76,7 +76,16 @@ async function main() {
   const cases = await loadCases(DATASET, args)
   console.error(`Loaded ${cases.length} cases from ${path.relative(ROOT, DATASET)}`)
 
-  const provider = new OpenAICompatProvider()
+  let provider: LLMProvider = new OpenAICompatProvider()
+  if (args.temperature !== undefined) {
+    const baseProvider = provider
+    const baseTemp = args.temperature
+    provider = {
+      name: `${baseProvider.name}@temp=${baseTemp}`,
+      complete: (req, signal) =>
+        baseProvider.complete({ ...req, temperature: baseTemp }, signal),
+    }
+  }
   console.error(`Provider: ${provider.name}`)
 
   const startedAt = Date.now()
@@ -103,7 +112,7 @@ async function main() {
   process.exit(report.passRate >= 0.8 ? 0 : 1)
 }
 
-type Args = { case?: string; limit?: number; skip?: number; noJudge: boolean; output?: string }
+type Args = { case?: string; limit?: number; skip?: number; noJudge: boolean; output?: string; temperature?: number }
 
 function parseArgs(argv: string[]): Args {
   const args: Args = { noJudge: false }
@@ -114,9 +123,10 @@ function parseArgs(argv: string[]): Args {
     else if (flag === "--skip") args.skip = Number(argv[++i])
     else if (flag === "--no-judge") args.noJudge = true
     else if (flag === "--output") args.output = argv[++i]
+    else if (flag === "--temperature") args.temperature = Number(argv[++i])
     else if (flag === "--help" || flag === "-h") {
       console.log(
-        "Usage: bun run evals/runner.ts [--case ID] [--limit N] [--skip N] [--no-judge] [--output file.json]",
+        "Usage: bun run evals/runner.ts [--case ID] [--limit N] [--skip N] [--no-judge] [--output file.json] [--temperature N]",
       )
       process.exit(0)
     }
