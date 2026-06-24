@@ -78,11 +78,9 @@ This is why `synthesizeFinalResponse` was removed, and why `multimind answer` wa
 
 The CLI does not care who or what the consumer is. Some examples:
 
-**OpenCode plugin.** The plugin captures the conversation, calls `multimind think`, injects `result.headsUp` as a synthetic message in the opencode session with `metadata.source === "multimind"`, and lets the opencode agent's next LLM turn produce the user-facing response. The CLI sees this as a regular stdin call. It does not know about opencode.
+**A host LLM agent.** The agent captures the conversation, calls `multimind think`, injects `result.headsUp` as a synthetic message in its own session, and lets the host's next LLM turn produce the user-facing response. The CLI sees this as a regular stdin call. It does not know about the host.
 
-**A Codex skill or Claude Code skill.** Same pattern: capture context, call `multimind think`, hand `result.headsUp` to the host LLM.
-
-**A non-LLM consumer.** A script, a CI step, a tool that wants to score a conversation. The CLI still returns the heads-up. The script can read `result.headsUp`, scan `result.meta.c0Decision` for `[multimind:blocked]` markers, write the heads-up to a file, etc. The script does not need a downstream LLM to use the CLI.
+**Another CLI consumer or a script.** A script, a CI step, a tool that wants to score a conversation. The CLI still returns the heads-up. The script can read `result.headsUp`, scan `result.meta.c0Decision` for `[multimind:blocked]` markers, write the heads-up to a file, etc. The script does not need a downstream LLM to use the CLI.
 
 **A smoke test.** `multimind eval` is the consumer of itself. The eval runner calls the pipeline, then asks a judge LLM to score `result.headsUp`. The judge is not the user. The judge is the CLI's quality signal.
 

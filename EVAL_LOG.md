@@ -25,15 +25,9 @@ This is not an eval run. It is the work that preceded the evals and shaped the s
 
 The eval log starts here because the architectural decisions are what the eval scores measure. Without them, the eval is just a number. With them, it is a test of a specific thesis: that a small model with a structured harness can do professional-grade thinking at low cost.
 
-### 1. The CLI was extracted from the opencode plugin
+### 1. The CLI is a pure input → output tool
 
-The pipeline started as an opencode plugin (`multimind_dev/.opencode/plugins/subconscious-server.ts`) that ran automatically in the background of the main agent. That coupling made sense when the system was a single integration. It did not make sense when the same thinking was useful to:
-
-- A Codex skill
-- A Claude Code skill
-- Any other agent that can capture a conversation and inject a response
-
-The CLI extraction decoupled the thinking from any specific host. The CLI is now a pure input → output tool: it takes a conversation, returns a heads-up, makes no decisions about what the consumer does with it.
+The CLI is a pure input → output tool: it takes a conversation, returns a heads-up, makes no decisions about what the consumer does with it. The boundary is intentional — the CLI does not synthesize user-facing messages, does not know which host is calling it, and does not own any delivery layer.
 
 ### 2. The output shape was split into `headsUp` / `workers` / `meta`
 
@@ -51,13 +45,13 @@ The split is part of the contract. The contract test `the library does NOT expor
 
 The original pipeline had a `synthesizeFinalResponse` function: take the heads-up, call the LLM again, produce a user-facing message. That step is now the consumer's job.
 
-The reasoning: synthesis is host-specific. The CLI does not know whether the consumer is opencode, Codex, a Slack bot, or a CLI test. Each host has its own prompt template, its own tone, its own constraints. Forcing the CLI to synthesize would mean the CLI's choice of synthesis is a constraint the consumer must work around.
+The reasoning: synthesis is host-specific. The CLI does not know which consumer is calling it. Each consumer has its own prompt template, its own tone, its own constraints. Forcing the CLI to synthesize would mean the CLI's choice of synthesis is a constraint the consumer must work around.
 
 The contract test `the library does NOT export synthesizeFinalResponse` is the second line of defense after `AGENTS.md` — if anyone re-adds the function, the test fails and the contributor has to defend the change.
 
 ### 4. The "Subconscious" framing was dropped for "multimind"
 
-The original name was "subconscious" because the pipeline ran in the background of the main agent — it was the agent's subconscious. The CLI is a standalone tool, not a background layer. The "subconscious" concept was tied to the opencode integration; once the CLI was extracted, the metaphor no longer fit.
+The original name was "subconscious". The CLI is a standalone tool, not a background layer of any host. The "subconscious" concept no longer fit the standalone framing, so the rebrand replaced it with "multimind" end to end.
 
 The rebrand touched:
 
@@ -113,7 +107,7 @@ For a personal project that is not in active collaboration, this is the right tr
 
 The eval measures a system that exists because of these decisions. The pass rate of 82.7% is a pass rate for *this specific system*: a CLI that returns thinking only, with the output split for consumer ergonomics, judged by a calibrated rubric on a 52-case dataset. Change any of the seven decisions above and the same eval suite would give a different number.
 
-The cost/value claim — M3 + pipeline at 82.7% pass for ~$1–2 per full run — depends on all seven. Remove the output shape split, and the consumer has to do work the CLI could do. Remove the contract tests, and a future contributor re-adds synthesis and the consumer's job gets harder. Remove the rebrand, and a tech lead reads the README and thinks "what is this 'subconscious' thing?" and closes the tab.
+The cost/value claim — M3 + pipeline at 82.7% pass for ~$1–2 per full run — depends on all seven. Remove the output shape split, and the consumer has to do work the CLI could do. Remove the contract tests, and a future contributor re-adds synthesis and the consumer's job gets harder. Remove the rebrand, and the codebase carries an obsolete name that misleads future readers about the system boundary.
 
 The eval is one input. The architectural work is the substrate. The log captures both because the next person to read this needs both to know what to do next.
 

@@ -13,7 +13,7 @@ What it does, in one paragraph: a small set of background lenses (W0 through W17
 
 The CLI deliberately does not produce user-facing messages — that is the consumer's job, by design. The full boundary is in [AGENTS.md](AGENTS.md).
 
-You can use it three ways: as a CLI (`multimind think < conversation.json`), as a library (`runThinkingPipeline(input, provider)`), or as the thinking layer in your own host agent (the opencode plugin, a Codex skill, a Claude Code skill, anything that can capture a conversation and inject a response).
+You can use it three ways: as a CLI (`multimind think < conversation.json`), as a library (`runThinkingPipeline(input, provider)`), or as the thinking layer in any host that can capture a conversation and inject a response.
 
 **Latest eval (M3, opencode-go HTTP, full 52-case surface sweep, post-parser-fix temp=0):**
 
@@ -36,7 +36,7 @@ Vanilla LLM calls have none of that. The model accepts the user's framing too ea
 
 **multimind** is a harness — the part that imposes the cognitive dynamics. It runs a small set of background lenses (W0 through W17) and a synthesizer (C0) that together produce a completion contract: a written agreement about what was actually verified, what was merely claimed, and what's left to do.
 
-The harness is a CLI. It takes context, runs the pipeline, returns the thinking. It is not coupled to OpenCode, Codex, Claude Code, or any specific tool. Any host that can capture a conversation and inject a response can drive it.
+The harness is a CLI. It takes context, runs the pipeline, returns the thinking. It is host-agnostic by design: any consumer that can capture a conversation and inject a response can drive it.
 
 ---
 
