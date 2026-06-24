@@ -5,7 +5,7 @@ A chronological record of every eval run, what we observed, and what we learned.
 The purpose is two-fold:
 
 1. **Memory across sessions.** The insight from one run ("all 4 thinking failures had 1 worker fired") is easy to lose. The log captures the *why*, not just the *what*.
-2. **Raw material for a future writeup.** Each entry is a self-contained narrative that can be quoted, summarized, or expanded into a section of a future technical post.
+2. **Reference material for future work.** Each entry is a self-contained narrative that can be referenced, summarized, or expanded into internal docs and design notes.
 
 Each entry has the same shape:
 
@@ -206,7 +206,6 @@ The full 52-case sweep cost approximately $1–2 in API. The same call set with 
 1. **Fix the W0 router prompt.** Add an explicit "must cover" contract. Target: re-run the 4 thinking-failure cases after the fix and confirm they all pass.
 2. **Re-run the full 52 cases after the W0 fix.** Expected improvement: 43/52 → ~48/52 (the 4 thinking fails clear, the 5 infra fails stay). New baseline ~92%.
 3. **Decide on eval determinism.** Either add N-run averaging or set temperature 0. This affects how we report results going forward.
-4. **Future writeup.** The W0 single-worker pattern is a good "here is what we learned from running the full eval for the first time" topic. The eval log is the raw material.
 
 ---
 
