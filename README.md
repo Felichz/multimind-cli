@@ -15,16 +15,16 @@ The CLI deliberately does not produce user-facing messages — that is the consu
 
 You can use it three ways: as a CLI (`multimind think < conversation.json`), as a library (`runThinkingPipeline(input, provider)`), or as the thinking layer in your own host agent (the opencode plugin, a Codex skill, a Claude Code skill, anything that can capture a conversation and inject a response).
 
-**Latest eval (M3, opencode-go HTTP, full 52-case surface sweep):**
+**Latest eval (M3, opencode-go HTTP, full 52-case surface sweep, post-parser-fix temp=0):**
 
 | Metric | Value |
 |---|---:|
-| Pass rate | **43 / 52 (82.7%)** |
-| Mean | **81.2** |
-| Median | **91** |
-| Wall time | ~3.5 hours |
+| Pass rate | **47 / 52 (90.4%)** |
+| Mean | **85.5** |
+| Median | **92** |
+| Wall time | ~2.5 hours per sweep |
 
-The 9 failures split into 3 categories: 4 real thinking failures (single-worker cases that needed multi-lens coverage), 3 pipeline SKIPs, 2 judge non-JSON outputs. The full per-case table and the failure analysis are in [Status](#status); the raw eval report is in [`evals/reports/latest.md`](evals/reports/latest.md).
+The 5 failures split into 3 categories: 1 expected SKIP control (REACT-007 is `skip-trivial-no-overthinking` by design), 1 real thinking failure (REACT-044 borderline 28/84), and 3 router-drops in the noise boundary that vary between runs. Multiple confirmation sweeps (v10, v12) hit 47/52 = 90.4%. Attempts to push past 90.4% via W0 prompt changes (v13, v14, v15) all regressed and were reverted — 90.4% is the natural ceiling for M3 with prompt-only changes. Full eval history in [`EVAL_LOG.md`](EVAL_LOG.md); raw per-sweep reports in [`evals/runs/`](evals/runs/).
 
 ---
 
@@ -461,26 +461,26 @@ To add a new LLM provider:
 - User-specific prompt extensions in `src/prompts-extensions/` (gitignored, per-user)
 - Local CI: `bun run ci` runs typecheck + lint + tests in one command
 
-**Latest eval results (M3 via opencode-go HTTP, full 52-case surface sweep):**
+**Latest eval results (M3 via opencode-go HTTP, full 52-case surface sweep, post-parser-fix temp=0):**
 
 | Metric | Value |
 |---|---:|
 | Cases | **52 / 52** |
-| Pass | **43 / 52 (82.7%)** |
-| Mean | **81.2** |
-| Median | **91** |
+| Pass | **47 / 52 (90.4%)** |
+| Mean | **85.5** |
+| Median | **92** |
 
-**Failures, by root cause:**
+**Failures, by root cause (current baseline, replicated across v10 and v12):**
 
 | Type | Count | Cases |
 |---|---:|---|
-| **Thinking** (single-worker, scored 58–76) | 4 | REACT-037, REACT-047, HO-003, REACT-049 |
-| **Pipeline SKIP** (W0 returned SKIP) | 3 | REACT-007, REACT-031, REACT-045 |
-| **Judge non-JSON** (parse failed) | 2 | REACT-013, REACT-029 |
+| **Expected SKIP** (REACT-007 is `skip-trivial-no-overthinking` by design) | 1 | REACT-007 |
+| **Real thinking failure** (borderline, persists across runs) | 1 | REACT-044 (28/84) |
+| **Router-drops** (W0 noise boundary, vary between runs) | 1–3 | REACT-003, REACT-041, REACT-049 (flaky) |
 
-The 4 thinking failures all had **exactly 1 worker fired**. The W0 router under-fires on cases that need a coordinated multi-worker set — the single worker is strong on its own dimension but misses the others. The fix is in the W0 router prompt.
+**W0 router-drops history:** 4 prompt-only attempts to reduce router-drops (v13 tie-breaker, v14 combined, v15 position-only) all regressed below 90.4% and were reverted. The 90.4% ceiling is bounded by M3 output budget variance, not W0 prompt structure. The next fix would be pipeline-side retry when `STATUS: ACTIVATE` is present but `WORKERS:` line is missing (out of scope per prompt-only constraint).
 
-Full per-case table, judge reasoning, and the failure analysis are in [`evals/reports/latest.md`](evals/reports/latest.md). Run `bun run bin/multimind.ts eval --case <ID>` to reproduce any case.
+Full per-case table, judge reasoning, and the failure analysis are in [`EVAL_LOG.md`](EVAL_LOG.md). Run `bun run bin/multimind.ts eval --case <ID>` to reproduce any case.
 
 **What is intentionally not built:**
 
