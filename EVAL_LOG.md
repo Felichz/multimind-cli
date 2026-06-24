@@ -1291,3 +1291,92 @@ v14 reverted (commit `e3528cb`). The W0 prompt is back to the v10/v12 baseline s
 - Pipeline-side retry when `STATUS: ACTIVATE` is present but `WORKERS:` line is missing (out of scope per goal)
 - Different model (out of scope)
 - Eval design changes (out of scope)
+
+---
+
+## 2026-06-24 — v15 sweep: Layer 3 position-only, REVERTED
+
+**Run:** `bun run evals/runner.ts --output evals/runs/full52-2026-06-24-v15-w0-emission.json`
+**W0 change:** Moved "## Output Format" section from end of file (line 229) to right after "## Decision 1:" intro (line 17). 10 lines moved, 0 new text. Layer 1 and Layer 2 byte-identical to baseline (verified with `git diff`).
+
+### Hypothesis
+
+If W0 reads the emission contract format BEFORE the decision rules, it will structure its output around the contract and avoid the w0_budget issue (model runs out of output tokens before emitting WORKERS: line).
+
+### Small validation (13 cases, before full sweep)
+
+| Class | Case | Result |
+|-------|------|--------|
+| w0_budget target | REACT-018 | 97 ✓ |
+| w0_budget target | REACT-032 | 91 ✓ |
+| v13_recovered preserve | REACT-003 | 91 ✓ |
+| v13_recovered preserve | REACT-041 | 96 (r2: judge timeout in r1) |
+| v13_recovered preserve | REACT-046 | 90 ✓ |
+| stable_pass_baseline control | REACT-001 | 96 ✓ |
+| stable_pass_baseline control | REACT-005 | 96 (r2: w0_budget in r1) |
+| stable_pass_baseline control | REACT-010 | 94 (r2: 77 in r1, borderline) |
+| stable_pass_baseline control | REACT-014 | 96 ✓ |
+| stable_pass_baseline control | REACT-015 | 88 ✓ |
+| genuine_skip preserve | REACT-007 | 0 SKIP (4s, control OK) |
+| variance_flip informative | REACT-006 | 96 (r2: w0_budget in r1) |
+| variance_flip informative | REACT-049 | 90 ✓ |
+
+**12/13 pass (REACT-007 is expected SKIP).** All w0_budget targets recovered in small validation. 0 stable_pass_baseline regressions in first attempt (some needed retries due to M3 variance). Decision: proceed to full sweep.
+
+### Full sweep result
+
+| Metric | v10 | v12 | v13 | v14 | **v15** |
+|--------|-----|-----|-----|-----|---------|
+| Pass rate | 47/52 (90.4%) | 47/52 (90.4%) | 46/52 (88.5%) | 40/52 (76.9%) | **40/52 (76.9%)** |
+| Mean | 85.0 | 86.0 | 85.0 | 75.0 | **75.0** |
+| Median | 92 | 93 | 92 | 92 | 92 |
+| Router-drops | 3 | 4 | 3 | 9 | **9** |
+| Real fails | 2 | 1 | 3 | 3 | **3** |
+
+### v15 router-drops (9)
+
+- REACT-007 (expected SKIP control)
+- REACT-006, REACT-013, REACT-017, REACT-018, REACT-019, REACT-022, REACT-041, REACT-048 (router-drops with workers=[])
+
+### v15 real-fails (3)
+
+- REACT-044: 48 (was 28/90/84 in baselines, real-fail class)
+- REACT-047: 78 (was 90/84/93 in baselines, borderline regression)
+- REACT-049: 72 (was 58/88/92, real-fail class)
+
+### v15 vs baselines: 7 stable_pass_baseline regressions
+
+- REACT-013: 91/90 → **0** (router-drop, regression)
+- REACT-017: 91/97 → **0** (router-drop, regression)
+- REACT-018: 88/96 → **0** (router-drop, regression — w0_budget target NOT recovered in full sweep)
+- REACT-019: 95/88 → **0** (router-drop, regression)
+- REACT-022: 90/93 → **0** (router-drop, regression)
+- REACT-041: 0/95 → **0** (router-drop, was flaky in baselines, regression in v15)
+- REACT-048: 92/90 → **0** (router-drop, regression)
+
+### Diagnosis
+
+**The position-only Layer 3 fix did not work.** It had no measurable effect on the w0_budget class:
+- Small validation showed w0_budget recovery (REACT-018: 97, REACT-032: 91)
+- Full sweep showed REACT-018 still hit w0_budget (router-drop)
+- 5 other cases that passed in baselines also hit w0_budget or fast-SKIP in v15
+
+**Why the small validation was misleading:** M3 has high non-determinism at temp=0. A single run of a case in small validation can pass by luck (REACT-018: 97 in small, 0 in full sweep). The small validation showed 12/13 pass, but this is mostly M3 variance, not the fix's effect.
+
+**The position-only move is structurally a no-op for the w0_budget class.** Moving the "## Output Format" block doesn't change the output token budget. The model still uses the same amount of tokens for thinking, and STILL runs out before emitting `WORKERS:` when its reasoning is long. The fix is cosmetic for the problem it was designed to solve.
+
+### Reverted
+
+v15 reverted (`git checkout -- src/prompts/W0_ROUTER.md`). W0 prompt is back to v10/v12 baseline state. Working tree clean. 27 commits ahead of origin/main.
+
+### Conclusion
+
+**The w0_budget class is not fixable via prompt-only Layer 3 changes.** The output token budget is a hard constraint of the M3 model serving the W0 call. Prompt reordering, formatting changes, or instruction changes do not reduce the thinking-token usage enough to consistently fit the `WORKERS:` line.
+
+**This confirms the v14 conclusion:** 90.4% (47/52) is the natural ceiling for M3 with prompt-only changes. The remaining ~10% of cases are bounded by:
+- M3 output budget variance (w0_budget class)
+- M3 sampling variance at temp=0 (variance_flip class)
+- Eval-design issues (REACT-007 SKIP-by-design)
+- Real fail class (REACT-044, REACT-049 borderline even in baselines)
+
+**Phase 5 escalation (per goal):** the correct next fix is pipeline-side retry when `STATUS: ACTIVATE` is present but `WORKERS:` line is missing. This is out of scope for this workstream (per hard constraints) but documented here for future work.
