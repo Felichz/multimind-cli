@@ -1373,3 +1373,101 @@ v15 reverted (`git checkout -- src/prompts/W0_ROUTER.md`). W0 prompt is back to 
 - Real fail class (REACT-044, REACT-049 borderline even in baselines)
 
 **Phase 5 escalation (per goal):** the correct next fix is pipeline-side retry when `STATUS: ACTIVATE` is present but `WORKERS:` line is missing. This is out of scope for this workstream (per hard constraints) but documented here for future work.
+
+---
+
+## 2026-06-24 — Router-only harness + v2 prompt simplification experiment (REVERTED)
+
+### Goal
+
+Test whether a more programatic W0 prompt (rules-as-lookup-tables, no prose) reduces the single-worker / activate_no_workers failure pattern documented in v15.
+
+### Harness
+
+`evals/router-only.ts` (new, 261 lines): isolates the W0 call from the rest of the pipeline. For each case, makes the same one or two LLM calls the pipeline does and reports the router exit (`skip`, `activate_with_workers`, `activate_no_workers`, `router_invalid`). Output: per-case trials + aggregate. Cheaper and faster than a full pipeline sweep.
+
+### Baseline (v1 prompt, 9 v15-drop cases × 2 trials = 18 trials)
+
+| Metric | Value |
+|---|---:|
+| skip | 2 (11%) |
+| activate_with_workers | 14 (78%) |
+| activate_no_workers | 2 (11%) |
+| router_invalid | 0 |
+| workers mean (when ACTIVATE) | 4.2 |
+| workers median | 4.5 |
+| workers stdev | 2.86 |
+| single-worker rate | 36% |
+| mean latency | 16459ms |
+
+### v2 prompt design
+
+- 75 lines, 3821 chars (vs v1's 238 lines, 25593 chars — 85% smaller)
+- Output contract at the top (STATUS first, no prose before)
+- 3-rule SKIP/ACTIVATE decision (S1/S2/S3, first-match-wins)
+- 6 binary concerns (C1–C6) with explicit "true when" conditions
+- 10 routing rules (R1–R10): R1 forces W1 mandatory, R2–R10 add workers by concern match
+- Hard limit: max 10 workers
+- General framing: no project-specific language
+
+### v2 result (same 9 cases × 3 trials = 27 trials)
+
+| Metric | v1 | v2 | Delta |
+|---|---:|---:|---:|
+| skip | 11% | 0% | -11pp |
+| activate_with_workers | 78% | 70% | -8pp |
+| activate_no_workers | 11% | 30% | **+19pp** ⚠️ |
+| workers mean (when ACTIVATE) | 4.2 | 4.1 | -0.1 |
+| workers median | 4.5 | 1 | **-3.5** ⚠️ |
+| workers stdev | 2.86 | 3.88 | **+1.02** ⚠️ |
+| single-worker rate | 36% | **58%** | **+22pp** ⚠️ |
+| mean latency | 16459ms | 10172ms | -38% (faster, worse outcomes) |
+
+### Per-case: trials with workers ≥ 3
+
+| Case | v1 (2 trials) | v2 (3 trials) |
+|---|---|---|
+| REACT-006 | 1/2 | 2/3 |
+| REACT-007 | 0/2 (SKIP) | 0/3 |
+| REACT-013 | 1/2 | 0/3 |
+| REACT-017 | 0/2 | 0/3 |
+| REACT-018 | 1/2 | 1/3 |
+| REACT-019 | 2/2 | 1/3 |
+| REACT-022 | 1/2 | 2/3 |
+| REACT-041 | 1/2 | 0/3 |
+| REACT-048 | 2/2 | 2/3 |
+
+### Diagnosis
+
+v2 is **strictly worse** on the criteria that matter:
+
+- **More single-worker** (58% vs 36%) — the exact failure pattern we wanted to fix.
+- **More activate_no_workers** (30% vs 11%) — the w0_budget class got worse. M3 with a 85%-shorter prompt uses more of its output budget on reasoning and runs out of tokens before `WORKERS:`.
+- **Bimodal distribution** — the mean of 4.1 masks that trials are clustered at 1 worker or 9-10 workers. v1's distribution was tighter (median 4.5).
+- **SKIP collapsed to 0%** — over-activation bias.
+- **Latency dropped 38%** because the prompt is shorter, but that's not a meaningful win when outcomes are worse.
+
+### Why v2 failed
+
+The R1–R10 rules are conditional on the model correctly evaluating C1–C6 concerns. M3 with temp=0 misclassifies concerns in borderline cases and ends up with the union {W1} only — which is 1 worker. v1 used 11 "Never skip" prose rules that forced multi-worker coverage by construction (the model couldn't easily decide "no concerns match").
+
+The tradeoff: v1's prose length forces coverage, v2's compact rules let the model under-select. M3 is not strong enough on conditional rules for v2 to work.
+
+### Reverted
+
+`src/prompts/W0_ROUTER.v2.md` deleted. v1 stays as the canonical W0 prompt.
+
+### Artifacts preserved
+
+- `evals/router-only.ts` — the isolated harness (kept, useful for future experiments)
+- `evals/runs/router-v15-drops-r2.json` — v1 baseline (18 trials)
+- `evals/runs/router-v15-drops-v2-r3.json` — v2 result (27 trials)
+
+### Conclusion
+
+The hypothesis "compact programatic prompt reduces W0 variance" is **falsified** for M3. The W0 prompt is not the bottleneck — model variance at temp=0 is. The 90.4% ceiling stands.
+
+Next experiment ideas (none committed to):
+- Re-test v2 with a stronger model (Opus, Sonnet) — v2's compact rules might work on a model with better conditional reasoning
+- Router-only multi-trial averaging to characterize true variance floor
+- Pipeline-side retry when `STATUS: ACTIVATE` present but `WORKERS:` missing (Phase 5)
