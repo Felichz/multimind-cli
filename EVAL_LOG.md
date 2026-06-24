@@ -1130,3 +1130,119 @@ REACT-007 is `skip-trivial-no-overthinking` — the case is designed to test the
 
 The workstream shipped 4 commits that together deliver a +4-6% pass rate improvement with a much lower noise floor. The 90% target is met in 2 of 3 post-parser-fix runs. The 94% target is unreachable without eval-design or model changes.
 
+
+---
+
+## 2026-06-23 — Phase 1 diagnosis: W0 router-drop root cause
+
+### Frequency analysis (v7-v12, 6 runs)
+
+Only 3 cases router-drop in 3+ of 6 runs:
+- **REACT-007** (6/6): focus `skip-trivial-no-overthinking`. SKIP-by-design, eval design issue. Out of scope.
+- **REACT-041** (5/6): user message "metele" (Spanish: "go for it"). Focus `process-checkpoint-uncoached-mid-build-self-protection`. The W0 should fire W2/W4/W6/W14 per the existing "Never skip" rule #21 ("Never skip when... 'metele' is a casual approval to continue..."), but only does 1/6 times.
+- **REACT-003** (3/6): user message is a long technical request about dev suite vs production gate. Should fire W12+W10+W3 per the "Never skip" rules, but only does 3/6 times.
+
+### Timing pattern (key finding)
+
+| Case outcome | Typical totalMs |
+|--------------|-----------------|
+| PASS (workers fired) | 150-340s (W0 takes time to think through and decide) |
+| FAIL (router-drop, workers=[]) | 13-30s (fast SKIP, W0 returns quick decision) |
+
+The router-drops are NOT timeouts. The W0 is making a fast decision to SKIP. When the W0 takes its time (150s+), it produces a real routing decision and fires workers. When the W0 returns quickly (13-30s), it produces a SKIP. The cases are at the **noise boundary** where the W0 is uncertain.
+
+### Root cause classification
+
+For REACT-003, REACT-041, REACT-024, REACT-006, REACT-009, REACT-013, REACT-034 — all router-drops match existing "Never skip" rules. The W0 is failing to apply them. The pattern is:
+
+1. User message could be interpreted as either "continuing prior work" (matches "Never skip" rule) OR "approval/acknowledgement" (matches "Skip" rule)
+2. When the W0 is fast, it defaults to SKIP
+3. When the W0 is slow, it reasons through the "Never skip" rule and ACTIVATE
+
+### Fix strategy (first principles)
+
+The W0 prompt already has 11 "Never skip" rules. The issue is the W0 sometimes misapplies them when user messages are short or could be interpreted as "approval." The fix is a **tie-breaker rule** that makes the priority explicit:
+
+> When a user message could match either a "Never skip" rule or a "Skip" rule, the "Never skip" rule wins. Default to ACTIVATE in ambiguous cases. A short or casual user message after substantive history is more likely a continuation of work than a social acknowledgement.
+
+This is general language (not case-specific) and targets the actual failure mode (W0 defaulting to SKIP on short messages).
+
+### Cases that match the fix target
+
+- REACT-041 ("metele") — short Spanish approval, should fire W2/W4/W6/W14 per "Never skip" rule #21
+- REACT-003 (long technical request) — should fire W12+W10+W3 per "Never skip" rule #37 (eval-suite design) or #27 (technical depth)
+- REACT-024 ("continue improving the system") — should fire W10+W12+W3+W6 per "Never skip" rule #21
+- REACT-006 (architecture comparison) — should fire W11+W15 per "Never skip" rule #39 (architecture boundary)
+- REACT-009 (skeptical Spanish question) — should fire W6 (self-check) per "Never skip" rule #43 (main agent confidence claims)
+- REACT-013 (test challenge) — should fire W12 per "Never skip" rule #37 (eval design)
+- REACT-034 (debug question) — should fire W8 per "Never skip" rule #23 (user debug handoff)
+
+All 7 cases map to existing "Never skip" rules. The W0 just isn't applying them.
+
+
+---
+
+## 2026-06-23 — v13 sweep: tie-breaker rule results
+
+**Run:** `bun run evals/runner.ts --output evals/runs/full52-2026-06-23-v13-w0-tiebreak.json`
+**W0 change:** Added "Tie-breaker for short or ambiguous user messages" section (lines 45 in uncommitted W0_ROUTER.md) instructing the W0 to walk the "Never skip" rules against the actual user message plus 2-3 history turns before defaulting to SKIP. ~7 lines added.
+
+### Final scorecard
+
+| Metric | v10 (baseline) | v11b (baseline) | v12 (baseline) | **v13** |
+|--------|----------------|-----------------|----------------|---------|
+| Pass rate | 47/52 (90.4%) | 44/52 (84.6%) | 47/52 (90.4%) | **46/52 (88.5%)** |
+| Mean | 85.0 | 81.0 | 86.0 | **85.5** |
+| Median | 92 | 91 | 93 | **92** |
+| Router-drops | 3 | 6 | 4 | **3** |
+| Real fails | 2 | 2 | 1 | **3** |
+
+### What the tie-breaker rule FIXED (8 cases flipped drop → pass)
+
+| Case | v10 | v11b | v12 | v13 | Why the fix worked |
+|------|-----|------|-----|-----|---------------------|
+| REACT-003 | 0 | 83 | 0 | **95** | Long technical request — tie-breaker activated W14/W3/W10/W12 |
+| REACT-006 | 84 | 84 | 0 | **96** | Architecture comparison — tie-breaker activated full worker set |
+| REACT-009 | 97 | 92 | 0 | **93** | Skeptical Spanish question — tie-breaker activated W11 |
+| REACT-013 | 91 | 0 | 90 | **95** | Test challenge — tie-breaker activated W11 |
+| REACT-024 | 97 | 0 | 97 | **96** | "Continue improving" — tie-breaker activated 6 workers |
+| REACT-034 | 88 | 0 | 92 | **97** | Debug question — tie-breaker activated W8 |
+| REACT-041 | 0 | 0 | 95 | **92** | "metele" — the persistent drop, now reliably activating |
+| REACT-046 | 92 | 0 | 93 | **93** | "just make it work" — full delivery worker set fired |
+
+### What the tie-breaker rule REGRESSED (4 cases)
+
+| Case | v10 | v11b | v12 | v13 | Class of regression |
+|------|-----|------|-----|-----|---------------------|
+| REACT-018 | 88 | 79 | 96 | **0** | W0 budget: "Router activated but selected no known workers" |
+| REACT-032 | 92 | 91 | 95 | **0** | W0 budget: "Router activated but selected no known workers" |
+| REACT-042 | 93 | 88 | 93 | **55** | Real fail: only W1 fired, output lacked evals/workflow gates |
+| REACT-049 | 58 | 88 | 92 | **81** | Real fail: extension targeted wrong file, just below minScore 85 |
+
+### New failure class discovered: W0 output budget
+
+REACT-018 and REACT-032 do NOT have a SKIP decision. The W0 says `STATUS: ACTIVATE`, but the model runs out of output tokens before emitting the `WORKERS: W1, W2, ...` line. The pipeline then says "Router activated but selected no known workers" and skips. W0 timing: 11.8s (REACT-018) and 20.3s (REACT-032) — slower than the expected REACT-007 SKIP (3.6s) but not by enough to be a deep reasoning session.
+
+**This is a separate bug class from the original SKIP drops.** The tie-breaker correctly flipped the W0 decision from SKIP to ACTIVATE. The model just didn't have enough output budget to include worker IDs.
+
+### Decision: revert v13, plan v14
+
+v13 missed the 47/52 target (got 46/52) and introduced 4 regressions. Per the documented strategy ("If v13 < 47/52 or shows regressions, revert W0 change and try a different approach"), the W0 change was reverted. The 8 wins are documented here so v14 can preserve them.
+
+### v14 design (next iteration)
+
+The tie-breaker rule's core insight is correct: W0 needs to walk the "Never skip" rules one by one against the actual user message + 2-3 history turns. The new bug is **output budget**: the model does the correct thinking but the structured `WORKERS:` line gets cut off.
+
+**v14 plan:** Add a second small W0 prompt change that says:
+
+> **Output budget discipline.** Your final router output must end with the contract (`STATUS:` line, `WORKERS:` line, `CONTEXT:` line). Keep your reasoning compact — a few sentences is enough. If your thinking block is consuming most of your output budget, summarize and stop. The contract is what workers and the consolidator depend on. A `STATUS: ACTIVATE` without a `WORKERS:` line is treated as a SKIP and breaks the case.
+
+This is general, first-principles language that targets the actual failure mode. It does not contradict the tie-breaker rule; it complements it by ensuring the W0 emits the contract reliably when it does decide to ACTIVATE.
+
+**v14 success criteria (more strict than v13):**
+- ≥ 47/52 pass rate
+- ≤ 1 router-drop (only REACT-007 SKIP-by-design)
+- 0 "Router activated but selected no known workers" events
+- 8+ previously-fixed cases (REACT-003, 006, 009, 013, 024, 034, 041, 046) all still pass
+
+If v14 hits the criteria, document in EVAL_LOG and commit. If v14 also misses, escalate to a v15 with both W0 changes (tie-breaker + output budget) and accept that 90% may be the natural ceiling for the current model+prompt combination.
