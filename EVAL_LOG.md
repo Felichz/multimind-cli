@@ -1471,3 +1471,127 @@ Next experiment ideas (none committed to):
 - Re-test v2 with a stronger model (Opus, Sonnet) — v2's compact rules might work on a model with better conditional reasoning
 - Router-only multi-trial averaging to characterize true variance floor
 - Pipeline-side retry when `STATUS: ACTIVATE` present but `WORKERS:` missing (Phase 5)
+
+---
+
+## 2026-06-24 — W0 prompt simplification full investigation (v2, v3, v4, all REVERTED)
+
+### Goal
+
+Determine whether a more compact / more programatic W0 prompt can outperform the v1 baseline (47/52 = 90.4%) on the same model (M3 via opencode-go, temp=0).
+
+### Method
+
+Built `evals/router-only.ts` to isolate the W0 call from the full pipeline. For each case, makes the same one or two LLM calls the pipeline does and reports the router exit. Tested 3 candidate prompts (v2, v3, v4) on the 9 v15-router-drop cases × 3 trials = 27 trials each. v1 ran on 9 × 2 = 18 trials for baseline.
+
+### Hypothesis tested
+
+W0 prompt simplification can improve pass rate by either:
+- (H1) Eliminating the w0_budget class (router emits ACTIVATE but loses WORKERS: line)
+- (H2) Reducing single-worker rate (router fires only 1 worker when the case demands multi-lens coverage)
+
+### v1 baseline (9 v15 drops × 2 trials = 18)
+
+| Metric | Value |
+|---|---:|
+| activate_with_workers | 14/18 (78%) |
+| activate_no_workers | 2/18 (11%) |
+| workers mean (when ACTIVATE) | 4.2 |
+| workers median | 4.5 |
+| single-worker rate | 5/14 (36%) |
+| raw length | 6516 chars mean |
+| latency | 16459ms mean |
+
+### v2 — Concerns + rules (75 lines, 3821 chars)
+
+Design: 6 abstract binary concerns (C1-C6) + 10 routing rules (R1-R10) where R1 forces W1 and R2-R10 add workers by concern. Hard cap of 10 workers.
+
+| Metric | v1 | v2 |
+|---|---:|---:|
+| activate_with_workers | 78% | 70% |
+| activate_no_workers | 11% | **30%** |
+| workers mean | 4.2 | 4.1 |
+| single-worker rate | 36% | **58%** |
+
+**Failed.** Compact rules let M3 under-select. M3 misclassifies concerns in borderline cases and ends up with `[W1]` only.
+
+### v3 — Per-worker triggers, no abstract concerns (52 lines, 3087 chars)
+
+Design: 17 worker descriptions with one-line triggers each ("W2 (Gap) — when..."). Model picks by matching triggers. No caps. No abstract concerns. No强制sive rules except "W1 always on ACTIVATE".
+
+Full 52-case sweep ran. Per-case inspection of the 30 single-worker trials showed the model reasoned multi-worker in `<think>` blocks but the output budget ran out before the `WORKERS:` line was complete. This is w0_budget in disguise: the model picks 4-6 workers mentally, writes 1.
+
+| Metric | v1 | v3 |
+|---|---:|---:|
+| activate_with_workers | 78% | **100%** |
+| activate_no_workers | 11% | **0%** |
+| workers mean | 4.2 | 3.4 |
+| single-worker rate | 36% | 59% |
+
+**Mixed.** v3 fixed w0_budget (0%) but created a worse distribution: 30/52 cases single-worker.
+
+### v3 per-case analysis (30 single-worker trials)
+
+Of the 30 cases where v3 emitted `[W1]` only, manual inspection of `expectedQuality` and `mustAvoid` in the dataset showed:
+- 28 cases had an explicit multi-lens requirement (W2/W3/W4/W6/W14/etc.) that v3 missed
+- Only REACT-007 (skip-trivial-no-overthinking) is correctly served by W1 alone
+- Single-worker is a real under-activation, not model noise
+
+### v4 — No-think instruction + one-shot example (66 lines, 3391 chars)
+
+Design: same as v3 but added explicit "Do not write `<think>` blocks. No prose." and a one-shot example of correct output.
+
+| Metric | v1 | v3 | v4 |
+|---|---:|---:|---:|
+| activate_with_workers | 78% | 100% | 100% |
+| activate_no_workers | 11% | 0% | 0% |
+| workers mean | 4.2 | 3.4 | **2.4** |
+| single-worker rate | 36% | 59% | **78%** |
+| raw length | 6516 | 3118 | 1758 |
+| latency | 16459 | 9840 | 6756 |
+
+**Worst of the four.** M3 ignored the no-think instruction. `<think>` blocks still appear. Output length dropped to 1758 chars (less budget spent on prose) but the final `WORKERS:` list got more parsimonious, not more thorough.
+
+### Combined comparison
+
+| Metric | v1 (n=18) | v2 (n=27) | v3 (n=27) | v4 (n=27) |
+|---|---:|---:|---:|---:|
+| activate_with_workers | 78% | 70% | 100% | 100% |
+| activate_no_workers | 11% | 30% | 0% | 0% |
+| workers mean | 4.2 | 4.1 | 3.4 | 2.4 |
+| workers median | 4.5 | 1 | 1 | 1 |
+| single-worker rate | 36% | 58% | 59% | 78% |
+| latency | 16459 | 10172 | 9840 | 6756 |
+
+### Conclusion
+
+**The hypothesis "compact W0 prompt can improve pass rate on M3" is FALSIFIED.**
+
+- v1's long prose (238 lines, 25593 chars) is the best at multi-worker coverage because the model can't easily decide "no concerns match" — it has to commit to workers based on the prose.
+- v2/v3/v4 progressively shorter prompts all degraded multi-worker distribution while improving exit parseability.
+- The tradeoff is structural: short prompts → less reasoning → less coverage.
+- M3 with temp=0 is not strong enough on conditional rules (v2) or per-trigger matching (v3/v4) to compensate for the lost prose scaffolding.
+
+### Reverted
+
+`src/prompts/W0_ROUTER.v2.md`, `W0_ROUTER.v3.md`, `W0_ROUTER.v4.md` all deleted. v1 stays as the canonical W0 prompt.
+
+### Artifacts preserved
+
+- `evals/router-only.ts` — isolated harness (kept, useful for future experiments)
+- `evals/runs/router-v15-drops-r2.json` — v1 baseline (18 trials)
+- `evals/runs/router-v15-drops-v2-r3.json` — v2 (27 trials)
+- `evals/runs/router-v15-drops-v3-r3.json` — v3 (27 trials)
+- `evals/runs/router-v15-drops-v4-r3.json` — v4 (27 trials)
+- `evals/runs/router-full52-v3-r1.json` — v3 full 52-case sweep (52 trials, single trial each)
+
+### What this rules out
+
+- W0 prompt simplification cannot push past 90.4% on M3.
+- Output budget is the bottleneck (v3/v4 reduce w0_budget to 0% but the saved budget goes to `<think>` not to the `WORKERS:` list).
+- Model variance at temp=0 is structural, not a prompt issue.
+
+### What remains
+
+- Phase 5 (pipeline-side retry when ACTIVATE present but WORKERS missing) — the only documented next step that could push past 90.4% without changing the prompt.
+- Re-test v3 or v4 on a stronger model (Opus, Sonnet) to validate that the v2/v3/v4 designs work on better reasoning engines.
