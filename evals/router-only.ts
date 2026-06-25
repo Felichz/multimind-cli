@@ -52,6 +52,7 @@ type TrialResult = {
   attempts: number
   latencyMs: number
   rawPreview: string
+  rawFull: string
   rawLength: number
 }
 
@@ -89,8 +90,8 @@ function extractStatus(output: string): "ACTIVATE" | "SKIP" | null {
 }
 
 function extractWorkers(output: string): string[] {
-  const search = output.match(/WORKERS:\s*(.+)/i)?.[1] ?? output
-  const ordered = Array.from(new Set((search.match(/\bW\d+\b/gi) ?? []).map((k) => k.toUpperCase())))
+  const search = output.match(/^WORKERS:\s*(.+)$/m)?.[1] ?? output.match(/WORKERS:\s*(.+)/)?.[1] ?? output
+  const ordered = Array.from(new Set((search.match(/\bW\d+\b/g) ?? []).map((k) => k.toUpperCase())))
   return ordered
 }
 
@@ -123,7 +124,7 @@ async function callProvider(
 ): Promise<{ content: string; ms: number }> {
   const started = Date.now()
   const response = await provider.complete(
-    { system: "", messages: [{ role: "user", content: user }], model },
+    { system: "", messages: [{ role: "user", content: user }], model, maxTokens: 8000 },
     AbortSignal.timeout(timeoutMs),
   )
   return { content: response.content, ms: Date.now() - started }
@@ -190,12 +191,12 @@ async function main() {
       let totalMs = 0
       try {
         attempts = 1
-        const r1 = await callProvider(provider, initialUser, model, 120_000)
+        const r1 = await callProvider(provider, initialUser, model, 600_000)
         content = r1.content
         totalMs += r1.ms
         if (!extractStatus(content)) {
           attempts = 2
-          const r2 = await callProvider(provider, initialUser + retrySuffix, model, 120_000)
+          const r2 = await callProvider(provider, initialUser + retrySuffix, model, 600_000)
           content = r2.content
           totalMs += r2.ms
         }
@@ -222,6 +223,7 @@ async function main() {
         attempts,
         latencyMs: totalMs,
         rawPreview: content.slice(0, 400),
+        rawFull: content,
         rawLength: content.length,
       })
       process.stderr.write(`  ${c.id} trial ${t}/${args.repeat}: ${exit} (${workers.length || 0} workers, ${totalMs}ms, ${attempts} attempt(s))\n`)

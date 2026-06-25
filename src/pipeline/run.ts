@@ -427,7 +427,7 @@ function pickWorkers(w0Output: string, workerFiles: Record<string, string>, over
   if (override?.length) {
     return override.filter((key) => workerFiles[key])
   }
-  const searchArea = w0Output.match(/WORKERS:\s*(.+)/i)?.[1] ?? w0Output
+  const searchArea = w0Output.match(/^WORKERS:\s*(.+)$/m)?.[1] ?? w0Output
   const ordered = Array.from(new Set((searchArea.match(/\bW\d+\b/gi) ?? []).map((k) => k.toUpperCase())))
   if (ordered.length) return ordered.filter((key) => workerFiles[key])
   return Object.keys(workerFiles).filter((key) => new RegExp(`\\b${key}(?:\\b|_)`, "i").test(searchArea))

@@ -1595,3 +1595,71 @@ Design: same as v3 but added explicit "Do not write `<think>` blocks. No prose."
 
 - Phase 5 (pipeline-side retry when ACTIVATE present but WORKERS missing) — the only documented next step that could push past 90.4% without changing the prompt.
 - Re-test v3 or v4 on a stronger model (Opus, Sonnet) to validate that the v2/v3/v4 designs work on better reasoning engines.
+
+---
+
+## 2026-06-24 — CRITICAL: parser bug discovery in pickWorkers (FIXED)
+
+### Discovery
+
+While investigating why v3-v5 router-only sweeps showed high single-worker rates despite the model emitting multi-worker lists, a regex bug in the W0 output parser was found.
+
+**Bug location**: `src/pipeline/run.ts:430` in `pickWorkers` function.
+
+**Bug**:
+```js
+// BUGGY: case-insensitive flag /i matches "Key workers:" inside <think> blocks
+const searchArea = w0Output.match(/WORKERS:\s*(.+)/i)?.[1] ?? w0Output
+```
+
+When the model emits a multi-worker list in its `` block followed by the formal `WORKERS:` line, the case-insensitive regex matches the **first** occurrence of "workers" (case-insensitive), which is often in prose like "Key workers:" or "Relevant workers:". The captured `searchArea` is then a fragment of the ``, not the actual `WORKERS:` line. The subsequent `searchArea.match(/\bW\d+\b/gi)` then finds only the first `W1` in that fragment, collapsing multi-worker to single-worker.
+
+**Evidence**: A raw full output of REACT-019 trial showed the model emitting `WORKERS: W1, W2, W3, W5, W6, W8, W9, W10, W14` correctly, but the parser reported `[W1]` because it captured `workers:\n- W1: Yes, always` from the ``.
+
+**Impact**:
+- The pipeline has been losing multi-worker coverage in cases where the model emits a `<think>` that mentions workers
+- This bug was active in all baseline sweeps (v3, v5, v10, v12) — explaining some of the "router-drops" and "single-worker pattern" we attributed to the model
+- The 90.4% baseline (v10/v12) was achieved WITH this bug active. Fixing the bug should improve coverage, not regress it
+
+### Fix
+
+```js
+// FIXED: anchored to line start, case-sensitive, multiline
+const searchArea = w0Output.match(/^WORKERS:\s*(.+)$/m)?.[1] ?? w0Output
+```
+
+One-line change. The `$` anchor with `m` flag ensures the regex matches the full line content. Removing `/i` prevents the false-positive on "Key workers:" prose.
+
+### Validation (router-only sweep, 9 v15-drop cases × 3 trials = 27 trials, v5 prompt)
+
+| Metric | v1 (n=18) | v5 BUGGY parser (n=27) | v5 FIXED parser (n=27) |
+|---|---:|---:|---:|
+| activate_with_workers | 78% | 100% | 96% |
+| activate_no_workers | 11% | 0% | 0% |
+| workers mean | 4.2 | 5.3 | **6.4** |
+| workers median | 4.5 | 6 | **6** |
+| single-worker rate | 36% | 41% | **4%** |
+
+### Per-case v5 with fix (was 0-1 workers per trial, now 4-12)
+
+| Case | v5 BUGGY | v5 FIXED |
+|---|---|---|
+| REACT-006 | 1, 8, 1 | 6, 8, 10 |
+| REACT-007 | 1, 1, 1 | 0, 1, 2 (correct: SKIP-by-design) |
+| REACT-013 | 1, 8, 9 | 8, 9, 11 |
+| REACT-017 | 5, 1, 4 | 4, 3, 5 |
+| REACT-018 | 1, 10, 7 | 5, 7, 6 |
+| REACT-019 | 1, 5, 6 | 7, 5, 4 |
+| REACT-022 | 0, 1, 1 | 11, 11, 12 |
+| REACT-041 | 6, 1, 8 | 6, 4, 6 |
+| REACT-048 | 1, 7, 5 | 6, 5, 5 |
+
+### Implications for the W0 simplification investigation
+
+The previous 4 versions (v2, v3, v4, v5) of W0 prompts were being evaluated against a buggy parser. The conclusion "W0 simplification cannot beat v1 baseline of 90.4%" was drawn from sweep data that was systematically under-counting workers. Re-evaluation with the fixed parser may yield different conclusions.
+
+The v1 baseline (47/52 = 90.4%) was achieved WITH the buggy parser. The 5 failures (REACT-007, REACT-021, REACT-041, REACT-044, REACT-049) may have been partly caused by parser-induced worker loss, not model reasoning failure.
+
+### Next step
+
+Run a full 52-case pipeline sweep with the fix applied to confirm the new baseline. Expected outcome: pass rate > 90.4% if the parser fix recovers workers that downstream C0 synthesis + judge would have approved.
